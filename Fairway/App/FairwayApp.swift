@@ -54,6 +54,7 @@ struct RootView: View {
         }
         .animation(.easeInOut(duration: 0.45), value: app.isOnboarded)
         .overlay(alignment: .top) { BannerOverlay() }
+        .modifier(ScreenshotSupport(tab: $tab))
         .fullScreenCover(item: presentationBinding) { presentation in
             Group {
                 switch presentation {

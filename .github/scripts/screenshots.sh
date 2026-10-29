@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# Launches the simulator build in screenshot mode and captures each main screen.
+# Usage: .github/scripts/screenshots.sh path/to/Fairway.app output-dir
+set -euo pipefail
+
+APP="$1"
+OUT="$2"
+BUNDLE_ID="io.github.ctibballs.fairway"
+mkdir -p "$OUT"
+
+# Pick the newest available iPhone simulator, preferring a Pro model.
+UDID=$(xcrun simctl list devices available -j | python3 -c '
+import json, sys
+devices = json.load(sys.stdin)["devices"]
+runtimes = sorted((k for k in devices if "iOS" in k), reverse=True)
+for runtime in runtimes:
+    phones = [d for d in devices[runtime] if d["name"].startswith("iPhone")]
+    pros = [d for d in phones if "Pro" in d["name"] and "Max" not in d["name"]]
+    pick = (pros or phones)
+    if pick:
+        print(pick[0]["udid"]); break
+')
+echo "Using simulator $UDID"
+xcrun simctl boot "$UDID" || true
+xcrun simctl bootstatus "$UDID" -b
+xcrun simctl status_bar "$UDID" override --time "9:41" --batteryState charged --batteryLevel 100 --cellularBars 4 --wifiBars 3 || true
+xcrun simctl install "$UDID" "$APP"
+xcrun simctl privacy "$UDID" grant location "$BUNDLE_ID" || true
+# Stand on the fairway of demo hole 4 so distances show up.
+xcrun simctl location "$UDID" set 51.447495,-0.263080 || true
+
+for screen in onboarding home round lobby match tournament play course map replay stats h2h handicap compete profile imperial; do
+  xcrun simctl terminate "$UDID" "$BUNDLE_ID" 2>/dev/null || true
+  xcrun simctl launch "$UDID" "$BUNDLE_ID" -FairwayScreen "$screen" >/dev/null
+  case "$screen" in
+    lobby|map|course|replay) sleep 12 ;;
+    match|tournament) sleep 16 ;;
+    *) sleep 8 ;;
+  esac
+  xcrun simctl io "$UDID" screenshot "$OUT/$screen.png" >/dev/null
+  echo "captured $screen"
+done
+
+# Fail loudly if the app crashed during any capture.
+if ls ~/Library/Logs/DiagnosticReports/Fairway* >/dev/null 2>&1; then
+  echo "::error::Fairway crashed in the simulator"
+  head -80 ~/Library/Logs/DiagnosticReports/Fairway* || true
+  exit 1
+fi

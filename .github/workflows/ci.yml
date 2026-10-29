@@ -44,3 +44,14 @@ jobs:
       - name: Show compiler errors
         if: failure()
         run: grep -E 'error:' xcodebuild.log | sort -u | head -150
+      - name: Capture screenshots in the simulator
+        id: screenshots
+        continue-on-error: true
+        run: .github/scripts/screenshots.sh DerivedData/Build/Products/Debug-iphonesimulator/Fairway.app screenshots
+      - name: Upload screenshots
+        if: always() && steps.screenshots.outcome != 'skipped'
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: screenshots/
+          if-no-files-found: ignore
