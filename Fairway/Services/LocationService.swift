@@ -1,3 +1,4 @@
+import SwiftUI
 import CoreLocation
 import MapKit
 import Observation
@@ -66,7 +67,7 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
 
     // MARK: - CLLocationManagerDelegate
 
-    nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         let status = manager.authorizationStatus
         Task { @MainActor [weak self] in
             guard let self else { return }
@@ -75,7 +76,7 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
         }
     }
 
-    nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let latest = locations.last else { return }
         Task { @MainActor [weak self] in
             // Ignore stale or very poor fixes.
@@ -86,7 +87,7 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
         }
     }
 
-    nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         let message = error.localizedDescription
         Task { @MainActor [weak self] in self?.lastError = message }
     }
