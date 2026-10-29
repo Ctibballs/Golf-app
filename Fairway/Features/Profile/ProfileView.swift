@@ -62,7 +62,7 @@ struct ProfileView: View {
                     NavigationLink {
                         SettingsView()
                     } label: {
-                        Label("Settings", systemImage: "gearshape.fill")
+                        Label("Settings", systemImage: "gearshape")
                     }
                     NavigationLink {
                         AboutView()

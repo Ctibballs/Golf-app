@@ -35,6 +35,7 @@ Everything runs on free services: [OpenGolfAPI](https://opengolfapi.org) for cou
 | **Weather** | Current conditions, the next 6 hours and a "playability" score, plus wind relative to the hole you're on. |
 | **Course maps** *(stretch goal)* | Every mapped hole is drawn from OpenStreetMap (fairways, greens, tees, bunkers, water) over satellite imagery, rotated tee-to-green. Swipe through holes and tap to measure layups. |
 | **Replays** *(stretch goal)* | Watch your round back: the ball flies along each shot with distances, hole by hole. Match replays show everyone's shots side by side in different colours. |
+| **Design** | A flat, editorial layout instead of boxed cards: hairline rules and tables, one deep-green accent, serif headlines over tabular figures, and light and dark modes. Motion is kept small: numbers roll into place, sparklines and bars draw in, tabs slide, and a ring pulses around a birdie. |
 
 ## Getting started
 

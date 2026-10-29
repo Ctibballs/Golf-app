@@ -18,7 +18,7 @@ struct CompeteView: View {
                                 Image(systemName: "person.2")
                                 Text("Host a match")
                                 Spacer()
-                                Text("Get a four-letter code").font(.subheadline).opacity(0.8)
+                                Image(systemName: "arrow.right")
                             }
                             .padding(.horizontal, 18)
                         }
@@ -29,7 +29,7 @@ struct CompeteView: View {
                                 Image(systemName: "number")
                                 Text("Join with a code")
                                 Spacer()
-                                Text("Matches and tournaments").font(.subheadline).foregroundStyle(.secondary)
+                                Image(systemName: "arrow.right").foregroundStyle(.secondary)
                             }
                             .padding(.horizontal, 18)
                         }

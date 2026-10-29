@@ -18,7 +18,8 @@ struct CourseDetailView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                hero
+                // A window onto the course map behind; the page slides up over it.
+                Color.clear.frame(height: 190)
                 VStack(alignment: .leading, spacing: Theme.sectionSpacing) {
                     titleBlock
                     if let course {
@@ -33,11 +34,19 @@ struct CourseDetailView: View {
                 }
                 .padding(.horizontal, Theme.gutter)
                 .padding(.top, 20)
+                .padding(.bottom, 32)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Theme.background)
+                .overlay(alignment: .top) { Hairline() }
             }
-            .padding(.bottom, 32)
+        }
+        .background(alignment: .top) {
+            hero
+                .frame(height: 320)
+                .clipped()
+                .ignoresSafeArea(edges: .top)
         }
         .background(Theme.background)
-        .ignoresSafeArea(edges: .top)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if let course {
@@ -86,9 +95,6 @@ struct CourseDetailView: View {
                     }
             }
         }
-        .frame(height: 250)
-        .clipped()
-        .overlay(alignment: .bottom) { Hairline() }
         .animation(.easeInOut(duration: 0.6), value: layout != nil)
     }
 

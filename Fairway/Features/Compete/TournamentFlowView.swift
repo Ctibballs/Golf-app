@@ -148,7 +148,7 @@ struct TournamentFlowView: View {
 
                     HStack(spacing: 10) {
                         Button { showMap = true } label: {
-                            Label("Where is everyone?", systemImage: "map")
+                            Label("Live map", systemImage: "map")
                         }
                         .buttonStyle(SecondaryButtonStyle())
 
