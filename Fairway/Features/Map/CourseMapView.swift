@@ -55,7 +55,7 @@ struct CourseMapView: View {
         .task { await load() }
         .onChange(of: focus) { _, hole in
             target = nil
-            guard let hole, let camera = layout?.hole(hole)?.camera(pitch: 35) else { return }
+            guard let hole, let camera = layout?.hole(hole)?.camera() else { return }
             withAnimation(.easeInOut(duration: 1.0)) { self.camera = .camera(camera) }
         }
     }

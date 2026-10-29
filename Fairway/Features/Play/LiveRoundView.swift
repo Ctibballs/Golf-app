@@ -176,8 +176,11 @@ private struct LiveRoundContent: View {
         let round = controller.round
         let toPar = round.map { Leaderboard.formatToPar($0.toPar) } ?? "E"
         let thru = round?.holesPlayed ?? 0
-        if let session, let position = session.myPosition {
+        if let session, let position = session.myPosition, position.thru > 0 {
             return "\(position.positionLabel) of \(session.snapshot.participants.count) · \(toPar) thru \(thru)"
+        }
+        if let session {
+            return "\(session.snapshot.participants.count) players · \(session.match.format.displayName)"
         }
         return "\(toPar) thru \(thru)"
     }
@@ -186,8 +189,16 @@ private struct LiveRoundContent: View {
 
     @ViewBuilder
     private var mapSection: some View {
+        if let distances = controller.greenDistances {
+            GreenDistancesView(distances: distances, units: controller.units, playsLike: controller.playsLike)
+                .foregroundStyle(.white)
+                .padding(.vertical, 12)
+                .padding(.bottom, controller.playsLike != nil ? 6 : 0)
+                .background(Theme.deepGreen.gradient, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                .transition(.opacity.combined(with: .scale(scale: 0.95)))
+        }
         if let layout = controller.layout, controller.holeLayout != nil {
-            ZStack(alignment: .topLeading) {
+            ZStack(alignment: .top) {
                 HoleMapView(
                     course: controller.course,
                     layout: layout,
@@ -200,42 +211,31 @@ private struct LiveRoundContent: View {
                     units: controller.units,
                     onPlaceBall: controller.placeBallMode ? { controller.manualBall = $0 } : nil
                 )
-                .frame(height: 320)
+                .frame(height: 340)
                 .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
 
-                if let distances = controller.greenDistances {
-                    GreenDistancesView(distances: distances, units: controller.units, playsLike: controller.playsLike)
-                        .foregroundStyle(.white)
-                        .padding(.vertical, 10)
-                        .background(.black.opacity(0.45), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                        .padding(10)
-                        .allowsHitTesting(false)
-                }
-
-                VStack {
-                    Spacer()
-                    HStack {
-                        Toggle(isOn: $controller.placeBallMode) {
-                            Label(controller.placeBallMode ? "Tap map to place ball" : "Using GPS", systemImage: controller.placeBallMode ? "hand.tap.fill" : "location.fill")
-                                .font(.caption.weight(.bold))
-                        }
-                        .toggleStyle(.button)
-                        .tint(.white)
-                        .buttonStyle(.bordered)
-                        .background(.black.opacity(0.35), in: Capsule())
-                        Spacer()
-                        Button { expandedMap = true } label: {
-                            Image(systemName: "arrow.up.left.and.arrow.down.right")
-                                .font(.caption.weight(.bold))
-                                .foregroundStyle(.white)
-                                .frame(width: 34, height: 34)
-                                .background(.black.opacity(0.45), in: Circle())
-                        }
+                // Controls sit at the top so they never cover the Apple Maps attribution.
+                HStack {
+                    Toggle(isOn: $controller.placeBallMode) {
+                        Label(controller.placeBallMode ? "Tap map to place ball" : "Using GPS", systemImage: controller.placeBallMode ? "hand.tap.fill" : "location.fill")
+                            .font(.caption.weight(.bold))
                     }
-                    .padding(10)
+                    .toggleStyle(.button)
+                    .tint(.white)
+                    .buttonStyle(.bordered)
+                    .background(.black.opacity(0.35), in: Capsule())
+                    Spacer()
+                    Button { expandedMap = true } label: {
+                        Image(systemName: "arrow.up.left.and.arrow.down.right")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(.white)
+                            .frame(width: 34, height: 34)
+                            .background(.black.opacity(0.45), in: Circle())
+                    }
                 }
+                .padding(10)
             }
-            .frame(height: 320)
+            .frame(height: 340)
         } else if controller.tracksShots {
             NoMapCard(controller: controller)
         }
@@ -251,6 +251,11 @@ private struct LiveRoundContent: View {
 
     // MARK: - Bottom bar
 
+    private func leaderboardLabel(_ session: MatchSession) -> String {
+        guard let position = session.myPosition, position.thru > 0 else { return "Leaderboard" }
+        return "\(position.positionLabel) · \(position.statusText)"
+    }
+
     private var bottomBar: some View {
         HStack(spacing: 12) {
             Button { controller.previous() } label: {
@@ -264,7 +269,7 @@ private struct LiveRoundContent: View {
                 Button { showLeaderboard = true } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "list.number")
-                        Text(session.myPosition.map { "\($0.positionLabel) · \($0.statusText)" } ?? "Leaderboard")
+                        Text(leaderboardLabel(session))
                             .contentTransition(.numericText())
                     }
                     .font(.subheadline.weight(.bold))

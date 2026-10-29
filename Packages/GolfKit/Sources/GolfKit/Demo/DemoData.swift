@@ -65,13 +65,19 @@ public enum DemoData {
         )
     }()
 
-    public static let miniGolfCourse: Course = Course.custom(
-        name: "Pirate Cove Adventure Golf",
-        gameType: .miniGolf,
-        pars: [2, 3, 2, 2, 3, 2, 3, 2, 2, 3, 2, 2, 3, 2, 2, 3, 2, 4],
-        location: GeoPoint(latitude: 51.4601, longitude: -0.2531),
-        id: miniGolfID
-    )
+    public static let miniGolfCourse: Course = {
+        var course = Course.custom(
+            name: "Pirate Cove Adventure Golf",
+            gameType: .miniGolf,
+            pars: [2, 3, 2, 2, 3, 2, 3, 2, 2, 3, 2, 2, 3, 2, 2, 3, 2, 4],
+            location: GeoPoint(latitude: 51.4601, longitude: -0.2531),
+            id: miniGolfID
+        )
+        course.source = .demo
+        course.city = "Demo Valley"
+        course.country = "Sample"
+        return course
+    }()
 
     public static let courses: [Course] = [golfCourse, pitchAndPuttCourse, miniGolfCourse]
 

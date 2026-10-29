@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Launches the simulator build in screenshot mode and captures each main screen.
 # Usage: .github/scripts/screenshots.sh path/to/Fairway.app output-dir
-set -euo pipefail
+set -uo pipefail
 
 APP="$1"
 OUT="$2"
@@ -36,17 +36,45 @@ limit 30 xcrun simctl privacy "$UDID" grant location "$BUNDLE_ID" || true
 # Stand on the fairway of demo hole 4 so distances show up.
 limit 30 xcrun simctl location "$UDID" set 51.447495,-0.263080 || true
 
-for screen in onboarding home round lobby match tournament play course map replay stats h2h handicap compete profile imperial; do
-  limit 30 xcrun simctl terminate "$UDID" "$BUNDLE_ID" 2>/dev/null || true
-  limit 60 xcrun simctl launch "$UDID" "$BUNDLE_ID" -FairwayScreen "$screen" >/dev/null
+reboot_simulator() {
+  log "Rebooting simulator"
+  limit 120 xcrun simctl shutdown "$UDID" || true
+  limit 60 xcrun simctl boot "$UDID" || true
+  limit 600 xcrun simctl bootstatus "$UDID" -b || true
+  limit 30 xcrun simctl location "$UDID" set 51.447495,-0.263080 || true
+}
+
+hangs=()
+previous="(start)"
+# Map-heavy screens last, so a rendering hang can't cost the others.
+for screen in onboarding home round lobby match tournament play stats h2h handicap compete profile imperial course map replay; do
+  # terminate fails harmlessly when the app isn't running; exit 142 means it timed out (hung).
+  limit 30 xcrun simctl terminate "$UDID" "$BUNDLE_ID" 2>/dev/null
+  status=$?
+  if [ "$status" -eq 142 ]; then
+    log "app hung after $previous"
+    hangs+=("$previous")
+    reboot_simulator
+  fi
+  if ! limit 60 xcrun simctl launch "$UDID" "$BUNDLE_ID" -FairwayScreen "$screen" >/dev/null; then
+    log "launch of $screen failed"
+    hangs+=("$screen")
+    reboot_simulator
+    continue
+  fi
   case "$screen" in
     lobby|map|course|replay) sleep 12 ;;
     match|tournament) sleep 16 ;;
     *) sleep 8 ;;
   esac
-  limit 60 xcrun simctl io "$UDID" screenshot "$OUT/$screen.png" >/dev/null
+  limit 60 xcrun simctl io "$UDID" screenshot "$OUT/$screen.png" >/dev/null || log "screenshot of $screen failed"
   log "captured $screen"
+  previous="$screen"
 done
+
+if [ ${#hangs[@]} -gt 0 ]; then
+  echo "::warning::Simulator became unresponsive after: ${hangs[*]}"
+fi
 
 # Fail loudly if the app crashed during any capture.
 if ls ~/Library/Logs/DiagnosticReports/Fairway* >/dev/null 2>&1; then

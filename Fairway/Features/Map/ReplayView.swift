@@ -46,7 +46,7 @@ struct ReplayView: View {
         .onChange(of: replay?.frames(at: time).hole) { _, hole in
             guard let hole, hole != shownHole else { return }
             shownHole = hole
-            if let holeCamera = layout?.hole(hole)?.camera(pitch: 40) {
+            if let holeCamera = layout?.hole(hole)?.camera() {
                 withAnimation(.easeInOut(duration: 0.9)) { camera = .camera(holeCamera) }
             }
         }
@@ -59,10 +59,14 @@ struct ReplayView: View {
         let entries: [ReplayEntry] = playerRounds.enumerated().compactMap { index, round in
             state.frames[round.playerID].map { ReplayEntry(index: index, round: round, frame: $0) }
         }
+        let currentHole = state.hole.flatMap { layout.hole($0) }
         return Map(position: $camera) {
-            CourseLayoutContent(layout: layout, focusHole: state.hole, showsHoleNumbers: false)
-            if let hole = state.hole, let green = layout.hole(hole)?.greenCenter {
-                Annotation("", coordinate: green.coordinate, anchor: .bottom) { PinMarker() }
+            // Only the hole being replayed: this map redraws every animation frame.
+            if let currentHole {
+                HoleLayoutContent(hole: currentHole)
+                if let green = currentHole.greenCenter {
+                    Annotation("", coordinate: green.coordinate, anchor: .bottom) { PinMarker() }
+                }
             }
             ForEach(entries) { entry in
                 ForEach(entry.frame.completed) { shot in
@@ -87,7 +91,7 @@ struct ReplayView: View {
         }
         .mapStyle(course.preferredMapStyle)
         .onAppear {
-            if let first = replay.holes.first?.hole, let c = layout.hole(first)?.camera(pitch: 40) {
+            if let first = replay.holes.first?.hole, let c = layout.hole(first)?.camera() {
                 camera = .camera(c)
                 shownHole = first
             }

@@ -107,6 +107,20 @@ final class TournamentStandingsTests: XCTestCase {
 
         let standings = TournamentStandings.compute(snapshot)
         XCTAssertEqual(standings.map(\.entrant.name), ["Ann", "Ben"])
+
+        // With handicaps, "today" is net like the total: Ben's 18 index gives a stroke a hole.
+        var netTournament = tournament
+        netTournament.useHandicaps = true
+        var netR2 = r2
+        netR2.useHandicaps = true
+        var benNet = card(ben, [5, 5, 3], current: 4)
+        benNet.handicapIndex = 18
+        let netSnapshot = TournamentSnapshot(tournament: netTournament, entrants: [ann, ben], rounds: [
+            1: snapshot.rounds[1]!,
+            2: MatchSnapshot(match: netR2, participants: [card(ann, [3, 4], current: 3), benNet]),
+        ])
+        let netBen = TournamentStandings.compute(netSnapshot).first { $0.entrant.name == "Ben" }!
+        XCTAssertEqual(netBen.today, -1, "+2 gross minus 3 handicap strokes")
         XCTAssertEqual(standings[0].totalToPar, -1)
         XCTAssertEqual(standings[0].today, -1)
         XCTAssertEqual(standings[0].thru, 2)

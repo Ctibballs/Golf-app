@@ -64,7 +64,9 @@ public enum TournamentStandings {
                 if tournament.format == .stableford { standing.points = (standing.points ?? 0) + points }
 
                 if round.number == liveRound {
-                    standing.today = scored.isEmpty ? nil : strokes - par
+                    // Match the total column: net when the event uses handicaps.
+                    let todayToPar = tournament.useHandicaps ? strokes - par - received : strokes - par
+                    standing.today = scored.isEmpty ? nil : todayToPar
                     standing.thru = scored.count
                     standing.currentHole = p.currentHole
                     standing.lastLocation = p.lastLocation
