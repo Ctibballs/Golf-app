@@ -9,8 +9,10 @@ import GolfKit
 final class LocationService: NSObject, CLLocationManagerDelegate {
     private(set) var authorization: CLAuthorizationStatus
     private(set) var location: CLLocation?
+    /// Whether continuous updates are wanted (they begin once permission is granted).
     private(set) var isUpdating = false
     private(set) var lastError: String?
+    private var wantsOneShot = false
 
     private let manager: CLLocationManager
 
@@ -48,10 +50,9 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
     }
 
     func start() {
-        requestAccess()
-        guard isAuthorized else { return }
-        manager.startUpdatingLocation()
         isUpdating = true
+        requestAccess()
+        if isAuthorized { manager.startUpdatingLocation() }
     }
 
     func stop() {
@@ -62,7 +63,11 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
     /// One-off fix for things like nearby course search.
     func requestOneShot() {
         requestAccess()
-        if isAuthorized { manager.requestLocation() }
+        if isAuthorized {
+            manager.requestLocation()
+        } else {
+            wantsOneShot = true
+        }
     }
 
     // MARK: - CLLocationManagerDelegate
@@ -72,7 +77,13 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
         Task { @MainActor [weak self] in
             guard let self else { return }
             self.authorization = status
-            if self.isAuthorized && self.isUpdating { self.manager.startUpdatingLocation() }
+            guard self.isAuthorized else { return }
+            // Resume whatever was asked for before permission arrived.
+            if self.isUpdating { self.manager.startUpdatingLocation() }
+            if self.wantsOneShot {
+                self.wantsOneShot = false
+                self.manager.requestLocation()
+            }
         }
     }
 

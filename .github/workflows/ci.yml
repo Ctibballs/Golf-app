@@ -23,6 +23,7 @@ jobs:
   ios:
     name: iOS app build + GolfKit tests (macOS)
     runs-on: macos-15
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@v5
       - name: Xcode version
@@ -47,6 +48,7 @@ jobs:
       - name: Capture screenshots in the simulator
         id: screenshots
         continue-on-error: true
+        timeout-minutes: 20
         run: .github/scripts/screenshots.sh DerivedData/Build/Products/Debug-iphonesimulator/Fairway.app screenshots
       - name: Upload screenshots
         if: always() && steps.screenshots.outcome != 'skipped'

@@ -25,6 +25,15 @@ final class LiveRoundController {
 
     @ObservationIgnored private let app: AppModel
     @ObservationIgnored private var lastSharedLocation: (point: GeoPoint, time: Date)?
+    @ObservationIgnored private var cachedClubAverages: [Club: Double]?
+
+    /// Your average distance per club, from past GPS rounds (computed once per round).
+    private var clubAverages: [Club: Double] {
+        if let cachedClubAverages { return cachedClubAverages }
+        let averages = Dictionary(uniqueKeysWithValues: StatsEngine.clubDistances(in: app.library.rounds).map { ($0.club, $0.average) })
+        cachedClubAverages = averages
+        return averages
+    }
 
     init(app: AppModel, roundID: UUID, session: MatchSession?) {
         self.app = app
@@ -107,28 +116,27 @@ final class LiveRoundController {
         }
         if shots.isEmpty && par >= 4 && distances.center > 230 { return .driver }
         if let position, let holeLayout, holeLayout.lie(at: position) == .green { return .putter }
-        let averages = Dictionary(uniqueKeysWithValues: StatsEngine.clubDistances(in: app.library.rounds).map { ($0.club, $0.average) })
-        return Club.suggested(for: playsLike ?? distances.center, averages: averages)
+        return Club.suggested(for: playsLike ?? distances.center, averages: clubAverages)
     }
 
     // MARK: - Lifecycle
 
     func load() async {
-        layout = await app.layout(for: course)
-        if let location = course.location ?? layout?.bounds?.center {
-            weather = await app.weather(at: location)
-        }
-        if tracksShots {
-            app.location.start()
-            if !app.location.isAuthorized && !app.location.isDenied {
-                // Permission prompt pending; nothing to do.
-            } else if app.location.isDenied {
-                placeBallMode = true
-            }
-        }
+        // Start GPS first so a fix is arriving while the map and weather load.
+        if tracksShots { app.location.start() }
         if app.library.settings.keepScreenAwake { UIApplication.shared.isIdleTimerDisabled = true }
         session?.startPolling()
         syncCurrentHole()
+
+        layout = await app.layout(for: course)
+        if tracksShots && app.location.isDenied {
+            // No GPS: mark shots by tapping the map, starting from the tee.
+            placeBallMode = true
+            manualBall = holeLayout?.teePoint
+        }
+        if let location = course.location ?? layout?.bounds?.center {
+            weather = await app.weather(at: location)
+        }
     }
 
     func unload() {
