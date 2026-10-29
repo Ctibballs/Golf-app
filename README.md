@@ -4,6 +4,21 @@ An iOS golf app for golf, pitch & putt and mini golf. Track every shot with GPS,
 
 Everything runs on free services: [OpenGolfAPI](https://opengolfapi.org) for course data, [OpenStreetMap](https://www.openstreetmap.org) for hole maps, [Open-Meteo](https://open-meteo.com) for weather, Apple MapKit for imagery and, optionally, a free [Supabase](https://supabase.com) project for online play.
 
+<p align="center">
+  <img src="docs/screenshots/home.jpg" width="200" alt="Home">
+  <img src="docs/screenshots/round.jpg" width="200" alt="Live round with GPS distances">
+  <img src="docs/screenshots/lobby.jpg" width="200" alt="Match lobby with join code">
+  <img src="docs/screenshots/tournament.jpg" width="200" alt="Tournament leaderboard">
+</p>
+<p align="center">
+  <img src="docs/screenshots/map.jpg" width="200" alt="Course map">
+  <img src="docs/screenshots/stats.jpg" width="200" alt="Stats">
+  <img src="docs/screenshots/h2h.jpg" width="200" alt="Head to head">
+  <img src="docs/screenshots/handicap.jpg" width="200" alt="Handicap">
+</p>
+
+<sub>Screenshots are captured automatically by CI from the iOS Simulator (Debug builds accept <code>-FairwayScreen &lt;name&gt;</code>; push a commit containing <code>[screenshots]</code> to refresh them).</sub>
+
 ## Features
 
 | Area | What you get |
