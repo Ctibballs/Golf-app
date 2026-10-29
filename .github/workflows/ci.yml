@@ -24,6 +24,8 @@ jobs:
     name: iOS app build + GolfKit tests (macOS)
     runs-on: macos-15
     timeout-minutes: 50
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v5
       - name: Xcode version
@@ -57,3 +59,16 @@ jobs:
           name: screenshots
           path: screenshots/
           if-no-files-found: ignore
+      - name: Publish screenshots to docs/ (commits tagged [screenshots] only)
+        if: always() && steps.screenshots.outcome != 'skipped' && github.event_name == 'push' && contains(github.event.head_commit.message, '[screenshots]')
+        run: |
+          ls screenshots/*.png >/dev/null 2>&1 || exit 0
+          mkdir -p docs/screenshots
+          for f in screenshots/*.png; do
+            sips -Z 800 -s format jpeg -s formatOptions 72 "$f" --out "docs/screenshots/$(basename "$f" .png).jpg" >/dev/null
+          done
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/screenshots
+          git commit -m "Update app screenshots [skip ci]" || exit 0
+          git push origin "HEAD:refs/heads/${GITHUB_REF_NAME}"
