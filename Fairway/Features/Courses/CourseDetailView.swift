@@ -14,12 +14,19 @@ struct CourseDetailView: View {
     @State private var showMatchSetup = false
     @State private var showEditor = false
     @State private var favoriteBounce = 0
+    @State private var scrolledPastMap = false
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 // A window onto the course map behind; the page slides up over it.
-                Color.clear.frame(height: 190)
+                Color.clear
+                    .frame(height: 190)
+                    .background {
+                        GeometryReader { proxy in
+                            Color.clear.preference(key: MapWindowOffsetKey.self, value: proxy.frame(in: .named("courseScroll")).minY)
+                        }
+                    }
                 VStack(alignment: .leading, spacing: Theme.sectionSpacing) {
                     titleBlock
                     if let course {
@@ -40,6 +47,11 @@ struct CourseDetailView: View {
                 .overlay(alignment: .top) { Hairline() }
             }
         }
+        .coordinateSpace(name: "courseScroll")
+        .onPreferenceChange(MapWindowOffsetKey.self) { offset in
+            let past = offset < -150
+            if past != scrolledPastMap { scrolledPastMap = past }
+        }
         .background(alignment: .top) {
             hero
                 .frame(height: 320)
@@ -47,6 +59,8 @@ struct CourseDetailView: View {
                 .ignoresSafeArea(edges: .top)
         }
         .background(Theme.background)
+        // Let the map show through the bar until the page covers it.
+        .toolbarBackground(scrolledPastMap ? .visible : .hidden, for: .navigationBar)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if let course {
@@ -260,6 +274,11 @@ struct CourseDetailView: View {
             loadError = error.localizedDescription
         }
     }
+}
+
+private struct MapWindowOffsetKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
 }
 
 /// Your history at this course: average, best, and per-hole difficulty.
