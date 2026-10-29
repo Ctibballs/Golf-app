@@ -223,20 +223,13 @@ public actor LibraryStore {
         return base.appendingPathComponent("Fairway", isDirectory: true)
     }
 
-    // Seconds since 1970 as a Double keeps sub-second precision (ISO 8601 would drop it).
-    static let encoder: JSONEncoder = {
-        let e = JSONEncoder()
-        e.dateEncodingStrategy = .secondsSince1970
-        return e
-    }()
+    // The default date strategy stores Date's own Double, so dates round-trip exactly
+    // (ISO 8601 drops sub-seconds; seconds-since-1970 picks up rounding error).
+    static let encoder = JSONEncoder()
+    static let decoder = JSONDecoder()
 
-    static let decoder: JSONDecoder = {
-        let d = JSONDecoder()
-        d.dateDecodingStrategy = .secondsSince1970
-        return d
-    }()
-
-    public func load() -> GolfLibrary {
+    /// Synchronous so the app can restore state before its first frame; only reads `fileURL`.
+    public nonisolated func load() -> GolfLibrary {
         guard let data = try? Data(contentsOf: fileURL) else { return GolfLibrary() }
         do {
             return try Self.decoder.decode(GolfLibrary.self, from: data)

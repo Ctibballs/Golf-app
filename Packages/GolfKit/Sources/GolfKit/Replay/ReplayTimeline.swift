@@ -136,3 +136,57 @@ public struct ReplayTimeline: Sendable {
         1 - pow(1 - max(0, min(1, x)), 2)
     }
 }
+
+/// Replays several players together: holes play one after another, and on each hole
+/// everyone's shots animate side by side.
+public struct GroupReplay: Sendable {
+    public struct HoleSegment: Sendable {
+        public let hole: Int
+        public let start: TimeInterval
+        public let duration: TimeInterval
+        public let timelines: [UUID: ReplayTimeline]
+        public var end: TimeInterval { start + duration }
+    }
+
+    public let holes: [HoleSegment]
+    public let totalDuration: TimeInterval
+    public let playerIDs: [UUID]
+
+    public init(players: [(id: UUID, shots: [ReplayShot])], holeOrder: [Int], gap: TimeInterval = 0.6) {
+        var segments: [HoleSegment] = []
+        var time: TimeInterval = 0
+        for hole in holeOrder {
+            var timelines: [UUID: ReplayTimeline] = [:]
+            for player in players {
+                let shots = player.shots.filter { $0.holeNumber == hole }
+                guard !shots.isEmpty else { continue }
+                timelines[player.id] = ReplayTimeline(shots: shots, holeIntro: 0.8)
+            }
+            let duration = timelines.values.map(\.totalDuration).max() ?? 0
+            guard duration > 0 else { continue }
+            segments.append(HoleSegment(hole: hole, start: time, duration: duration, timelines: timelines))
+            time += duration + gap
+        }
+        self.holes = segments
+        self.totalDuration = max(0, time - gap)
+        self.playerIDs = players.map(\.id)
+    }
+
+    public var isEmpty: Bool { holes.isEmpty }
+
+    /// The hole being shown at a moment (the last one that has started).
+    public func segment(at time: TimeInterval) -> HoleSegment? {
+        holes.last { $0.start <= time } ?? holes.first
+    }
+
+    /// Each player's frame on the current hole.
+    public func frames(at time: TimeInterval) -> (hole: Int?, frames: [UUID: ReplayFrame]) {
+        guard let segment = segment(at: time) else { return (nil, [:]) }
+        let local = max(0, time - segment.start)
+        return (segment.hole, segment.timelines.mapValues { $0.frame(at: local) })
+    }
+
+    public func startTime(ofHole hole: Int) -> TimeInterval? {
+        holes.first { $0.hole == hole }?.start
+    }
+}

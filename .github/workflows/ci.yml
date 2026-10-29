@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     container: swift:6.0
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Run tests
         run: swift test --package-path Packages/GolfKit
 
@@ -24,7 +24,7 @@ jobs:
     name: iOS app build + GolfKit tests (macOS)
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Xcode version
         run: xcodebuild -version
       - name: GolfKit tests

@@ -244,7 +244,7 @@ final class DemoAndLibraryTests: XCTestCase {
         library.toggleFavorite("abc")
         try await store.save(library)
 
-        let loaded = await store.load()
+        let loaded = store.load()
         XCTAssertEqual(loaded, library)
         XCTAssertEqual(loaded.profile?.initials, "CT")
         XCTAssertEqual(loaded.profile?.handicapSettings(for: .miniGolf).roundsRequired, 5)
@@ -266,5 +266,34 @@ final class DemoAndLibraryTests: XCTestCase {
 extension GolfLibrary {
     static func decodeLegacy(_ json: String) throws -> GolfLibrary {
         try JSONDecoder().decode(GolfLibrary.self, from: Data(json.utf8))
+    }
+}
+
+final class GroupReplayTests: XCTestCase {
+    func testPlayersShareHolesAndHolesRunInOrder() {
+        let a = UUID(), b = UUID()
+        let layout = DemoData.golfLayout
+        func shots(_ id: UUID, hole: Int, count: Int) -> [ReplayShot] {
+            let h = layout.hole(hole)!
+            let points = (0...count).map { GeoMath.point(along: h.path, distance: Double($0) / Double(count) * (h.length ?? 300))! }
+            return (0..<count).map { ReplayShot(playerID: id, holeNumber: hole, strokeNumber: $0 + 1, start: points[$0], end: points[$0 + 1], lie: $0 == 0 ? .tee : .fairway) }
+        }
+        let replay = GroupReplay(
+            players: [(a, shots(a, hole: 1, count: 4) + shots(a, hole: 2, count: 3)), (b, shots(b, hole: 1, count: 5))],
+            holeOrder: [1, 2, 3]
+        )
+        XCTAssertEqual(replay.holes.map(\.hole), [1, 2], "hole 3 has no shots and is skipped")
+        XCTAssertEqual(replay.holes[0].timelines.count, 2)
+        XCTAssertEqual(replay.holes[1].timelines.count, 1)
+        XCTAssertGreaterThan(replay.holes[1].start, replay.holes[0].end)
+
+        let mid = replay.frames(at: replay.holes[0].duration / 2)
+        XCTAssertEqual(mid.hole, 1)
+        XCTAssertEqual(mid.frames.count, 2)
+        let second = replay.frames(at: replay.startTime(ofHole: 2)! + 0.1)
+        XCTAssertEqual(second.hole, 2)
+        XCTAssertNotNil(second.frames[a])
+        XCTAssertNil(second.frames[b])
+        XCTAssertEqual(replay.frames(at: replay.totalDuration).frames[a]?.completed.count, 3)
     }
 }
