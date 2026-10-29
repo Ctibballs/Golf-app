@@ -18,9 +18,19 @@ struct RoundSummaryView: View {
                     VStack(alignment: .leading, spacing: Theme.sectionSpacing) {
                         hero(round)
                         if let session {
-                            MatchResultsSection(session: session)
+                            let model = ResultsCardModel(snapshot: session.snapshot)
+                            VStack(alignment: .leading, spacing: 16) {
+                                SectionHeader(title: "Results", subtitle: "\(model.entries.count) players")
+                                ResultsCard(model: model, units: app.units)
+                                ShareScorecardButton(model: model, units: app.units)
+                                    .buttonStyle(SecondaryButtonStyle(tint: Theme.fairway))
+                            }
+                            .reveal(1)
+                        } else {
+                            ShareScorecardButton(model: ResultsCardModel(round: round, avatar: app.profile.avatar), units: app.units)
+                                .buttonStyle(SecondaryButtonStyle(tint: Theme.fairway))
                         }
-                        RoundReport(round: round)
+                        RoundReport(round: round, showsScorecard: session == nil)
                     }
                     .padding(.horizontal, Theme.gutter)
                     .padding(.bottom, 32)
@@ -88,38 +98,13 @@ struct RoundSummaryView: View {
     }
 }
 
-/// Final standings of a match.
-struct MatchResultsSection: View {
-    let session: MatchSession
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            SectionHeader(title: "Results", subtitle: session.match.format.displayName)
-            DividedList(session.leaderboard, inset: 44) { entry in
-                HStack(spacing: 12) {
-                    Text(entry.positionLabel)
-                        .font(.figure(15, weight: .semibold))
-                        .frame(width: 32, alignment: .leading)
-                        .foregroundStyle(entry.position == 1 && entry.thru > 0 ? Theme.gold : .secondary)
-                    AvatarView(avatar: entry.participant.avatar, size: 32)
-                    Text(entry.participant.name).font(.body.weight(.medium))
-                    if entry.position == 1 && entry.thru > 0 {
-                        Image(systemName: "crown.fill").font(.footnote).foregroundStyle(Theme.gold)
-                    }
-                    Spacer()
-                    Text(entry.statusText).font(.figure(17, weight: .semibold))
-                }
-                .padding(.vertical, 10)
-            }
-        }
-    }
-}
-
 /// Stats, scorecard, handicap impact and replay link for a round. Shared by the summary
 /// and the history detail screen.
 struct RoundReport: View {
     @Environment(AppModel.self) private var app
     let round: Round
+    /// Off when a results card above already shows everyone's card.
+    var showsScorecard = true
 
     var body: some View {
         let stats = StatsEngine.scoring(for: round)
@@ -145,13 +130,15 @@ struct RoundReport: View {
                 }
             }
 
-            VStack(alignment: .leading, spacing: 12) {
-                SectionHeader(title: "Scorecard")
-                ScorecardGrid(
-                    course: round.course, holes: round.holeNumbers, tee: round.tee,
-                    players: [ScorecardPlayerRow(round: round, avatar: round.playerID == app.profile.id ? app.profile.avatar : nil)],
-                    units: app.units
-                )
+            if showsScorecard {
+                VStack(alignment: .leading, spacing: 12) {
+                    SectionHeader(title: "Scorecard")
+                    ScorecardGrid(
+                        course: round.course, holes: round.holeNumbers, tee: round.tee,
+                        players: [ScorecardPlayerRow(round: round, avatar: round.playerID == app.profile.id ? app.profile.avatar : nil)],
+                        units: app.units
+                    )
+                }
             }
 
             HandicapImpactSection(round: round)
@@ -304,10 +291,14 @@ struct RoundDetailView: View {
                         }
                     }
                     .reveal(0)
-                    if let record = app.library.matchHistory.first(where: { $0.id == round.matchID }) {
+                    let record = app.library.matchHistory.first(where: { $0.id == round.matchID })
+                    if let record {
                         PastMatchSection(record: record)
+                    } else {
+                        ShareScorecardButton(model: ResultsCardModel(round: round, avatar: round.playerID == app.profile.id ? app.profile.avatar : nil), units: app.units)
+                            .buttonStyle(SecondaryButtonStyle(tint: Theme.fairway))
                     }
-                    RoundReport(round: round)
+                    RoundReport(round: round, showsScorecard: record == nil)
                 }
                 .padding(.horizontal, Theme.gutter)
                 .padding(.bottom, 32)
@@ -345,29 +336,18 @@ struct RoundDetailView: View {
     }
 }
 
-/// Everyone's scores from a saved match.
+/// Everyone's scores from a saved match, with the podium and a way to share them.
 struct PastMatchSection: View {
     @Environment(AppModel.self) private var app
     let record: MatchRecord
 
     var body: some View {
-        let entries = Leaderboard.entries(for: record.snapshot)
-        VStack(alignment: .leading, spacing: 4) {
-            SectionHeader(title: record.snapshot.match.name, subtitle: record.snapshot.match.format.displayName)
-            DividedList(entries, inset: 40) { entry in
-                HStack(spacing: 10) {
-                    Text(entry.positionLabel)
-                        .font(.figure(15, weight: .semibold))
-                        .frame(width: 28, alignment: .leading)
-                        .foregroundStyle(.secondary)
-                    AvatarView(avatar: entry.participant.avatar, size: 28)
-                    Text(entry.participant.id == app.profile.id ? "You" : entry.participant.name).font(.body.weight(.medium))
-                    Spacer()
-                    Text("\(entry.gross)").font(.figure(15)).foregroundStyle(.secondary)
-                    Text(entry.statusText).font(.figure(16, weight: .semibold)).frame(minWidth: 50, alignment: .trailing)
-                }
-                .padding(.vertical, 10)
-            }
+        let model = ResultsCardModel(snapshot: record.snapshot)
+        VStack(alignment: .leading, spacing: 16) {
+            SectionHeader(title: "Results", subtitle: "\(model.entries.count) players")
+            ResultsCard(model: model, units: app.units)
+            ShareScorecardButton(model: model, units: app.units)
+                .buttonStyle(SecondaryButtonStyle(tint: Theme.fairway))
             if record.snapshot.participants.contains(where: { $0.scores.contains { !$0.shots.isEmpty } }) {
                 NavigationLink {
                     ReplayView(
@@ -377,8 +357,7 @@ struct PastMatchSection: View {
                 } label: {
                     Label("Replay everyone's shots", systemImage: "play.fill")
                 }
-                .buttonStyle(SecondaryButtonStyle(tint: Theme.fairway))
-                .padding(.top, 10)
+                .buttonStyle(SecondaryButtonStyle())
             }
         }
     }

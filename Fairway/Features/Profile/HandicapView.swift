@@ -47,8 +47,9 @@ struct HandicapView: View {
                 VStack(spacing: 0) {
                     Text(result.displayIndex)
                         .font(.display(40, weight: .regular))
+                        .foregroundStyle(result.isEnabled ? .primary : .secondary)
                         .contentTransition(.numericText(value: result.index ?? 0))
-                    Eyebrow("Index")
+                    Eyebrow(result.isEnabled ? "Index" : "Handicap")
                 }
             }
             .frame(width: 136, height: 136)
@@ -67,6 +68,10 @@ struct HandicapView: View {
                     Text("Almost there").font(.headline)
                     Text("\(result.eligibleRounds) of \(result.roundsRequired) rounds played. Your index appears after \(result.roundsUntilEstablished) more.")
                         .font(.footnote).foregroundStyle(.secondary)
+                case .off:
+                    Text("Handicap off").font(.headline)
+                    Text("You play off scratch in net games. Rounds still count, so your index is ready whenever you switch it back on.")
+                        .font(.footnote).foregroundStyle(.secondary)
                 }
             }
         }
@@ -74,6 +79,7 @@ struct HandicapView: View {
     }
 
     private func progress(_ result: HandicapResult) -> CGFloat {
+        if !result.isEnabled { return 0 }
         if result.index != nil { return 1 }
         return CGFloat(result.eligibleRounds) / CGFloat(max(1, result.roundsRequired))
     }
@@ -81,27 +87,45 @@ struct HandicapView: View {
     private var modeSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             SectionHeader(title: "How it's set")
-            Picker("Mode", selection: settings.mode) {
-                Text("Automatic").tag(HandicapMode.automatic)
-                Text("Manual").tag(HandicapMode.manual)
+            Toggle(isOn: settings.isEnabled) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Use a handicap").font(.body.weight(.medium))
+                    Text(settings.wrappedValue.isEnabled
+                         ? "Shown on your profile and used for strokes in net matches and tournaments."
+                         : "Off: no index is shown and you play off scratch.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                        .contentTransition(.opacity)
+                }
             }
-            .pickerStyle(.segmented)
+            .tint(Theme.fairway)
+            .sensoryFeedback(.selection, trigger: settings.wrappedValue.isEnabled)
 
-            if settings.wrappedValue.mode == .automatic {
-                Stepper(value: settings.roundsRequired, in: HandicapSettings.minimumRounds...HandicapSettings.maximumRounds) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Generate after \(settings.wrappedValue.roundsRequired) rounds").font(.body.weight(.medium))
-                        Text(gameType.usesWorldHandicapSystem ? "WHS needs at least 3 scores (54 holes)." : "More rounds give a steadier index.")
-                            .font(.footnote).foregroundStyle(.secondary)
+            if settings.wrappedValue.isEnabled {
+                VStack(alignment: .leading, spacing: 16) {
+                    Picker("Mode", selection: settings.mode) {
+                        Text("Automatic").tag(HandicapMode.automatic)
+                        Text("Manual").tag(HandicapMode.manual)
+                    }
+                    .pickerStyle(.segmented)
+
+                    if settings.wrappedValue.mode == .automatic {
+                        Stepper(value: settings.roundsRequired, in: HandicapSettings.minimumRounds...HandicapSettings.maximumRounds) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Generate after \(settings.wrappedValue.roundsRequired) rounds").font(.body.weight(.medium))
+                                Text(gameType.usesWorldHandicapSystem ? "WHS needs at least 3 scores (54 holes)." : "More rounds give a steadier index.")
+                                    .font(.footnote).foregroundStyle(.secondary)
+                            }
+                        }
+                        .transition(.opacity)
+                    } else {
+                        ManualIndexEditor(index: Binding(
+                            get: { settings.wrappedValue.manualIndex ?? 18 },
+                            set: { settings.wrappedValue.manualIndex = HandicapCalculator.roundToTenth($0) }
+                        ))
+                        .transition(.opacity)
                     }
                 }
-                .transition(.opacity)
-            } else {
-                ManualIndexEditor(index: Binding(
-                    get: { settings.wrappedValue.manualIndex ?? 18 },
-                    set: { settings.wrappedValue.manualIndex = HandicapCalculator.roundToTenth($0) }
-                ))
-                .transition(.opacity)
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
     }

@@ -29,7 +29,7 @@ struct ScreenshotSupport: ViewModifier {
     }
 
     enum DebugScreen: String, Identifiable {
-        case courseDetail, courseMap, replay, headToHead, handicap
+        case courseDetail, courseMap, replay, headToHead, handicap, trophies, results
         var id: String { rawValue }
     }
 
@@ -50,6 +50,19 @@ struct ScreenshotSupport: ViewModifier {
             }
         case .handicap:
             HandicapView(gameType: .golf)
+        case .trophies:
+            TrophyCabinetView()
+        case .results:
+            if let record = app.library.matchHistory.first(where: { $0.snapshot.participants.count >= 4 }) {
+                ScrollView {
+                    PastMatchSection(record: record)
+                        .padding(.horizontal, Theme.gutter)
+                        .padding(.bottom, 32)
+                }
+                .background(Theme.background)
+                .navigationTitle(record.snapshot.match.name)
+                .navigationBarTitleDisplayMode(.inline)
+            }
         }
     }
 
@@ -116,6 +129,8 @@ struct ScreenshotSupport: ViewModifier {
         case "replay": return .replay
         case "h2h": tab = .stats; return .headToHead
         case "handicap": return .handicap
+        case "trophies": return .trophies
+        case "results": return .results
         default: break
         }
         return nil

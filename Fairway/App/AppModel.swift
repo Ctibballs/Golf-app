@@ -482,10 +482,30 @@ final class AppModel {
     private func register(_ snapshot: TournamentSnapshot) -> TournamentSession {
         let session = TournamentSession(service: matchService, snapshot: snapshot, myID: profile.id)
         session.onUpdate = { [weak self] latest in
-            self?.update { $0.upsert(latest) }
+            guard let self else { return }
+            let wasFinished = self.library.tournaments.first { $0.id == latest.id }?.tournament.status == .finished
+            self.update { $0.upsert(latest) }
+            if !wasFinished && latest.tournament.status == .finished {
+                self.announceResult(of: latest)
+            }
         }
         tournamentSessions[snapshot.tournament.id] = session
         return session
+    }
+
+    /// Tells the player how they finished once a tournament closes.
+    private func announceResult(of snapshot: TournamentSnapshot) {
+        guard let entry = TrophyCabinet.build(for: profile.id, from: [snapshot]).entries.first,
+              let trophy = entry.trophy else { return }
+        switch trophy {
+        case .champion:
+            show(Banner(title: "Champion of \(entry.name)!", message: "A new trophy for your cabinet.", style: .celebration), for: 5)
+        case .runnerUp, .thirdPlace:
+            show(Banner(title: "\(trophy.displayName) in \(entry.name)", message: "Added to your trophy cabinet.", style: .celebration), for: 5)
+        case .finisher, .entered:
+            let winner = entry.leaderName.map { "\($0) takes the title. " } ?? ""
+            show(Banner(title: "\(entry.name) is complete", message: winner + "Your result is in your trophy cabinet.", style: .info), for: 5)
+        }
     }
 
     func tournamentSession(for game: ActiveGame) async throws -> TournamentSession {
@@ -513,6 +533,7 @@ final class AppModel {
         update {
             $0.rounds += history.rounds
             for record in history.matches { $0.upsert(record) }
+            for tournament in history.tournaments { $0.upsert(tournament) }
             $0.hasSampleData = true
         }
     }

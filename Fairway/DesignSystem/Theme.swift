@@ -22,6 +22,9 @@ enum Theme {
     /// Double bogey or worse.
     static let double = Color(light: 0x27365A, dark: 0xA6B3CF)
     static let sand = Color(light: 0xB8975A, dark: 0xCDB07A)
+    /// Trophy metals.
+    static let silver = Color(light: 0x8A949C, dark: 0xC3CBD2)
+    static let bronze = Color(light: 0x9A6638, dark: 0xD49A66)
 
     static let background = Color(uiColor: .systemBackground)
     /// The only filled surface: keys, inputs and skeletons.

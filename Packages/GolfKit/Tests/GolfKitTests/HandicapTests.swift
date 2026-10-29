@@ -107,6 +107,31 @@ final class HandicapTests: XCTestCase {
         XCTAssertNotNil(result.calculatedIndex)
     }
 
+    func testHandicapCanBeSwitchedOff() throws {
+        let course = testCourse(holes: 18)
+        let rounds = (0..<3).map { _ in round(on: course, strokes: course.holes.map { $0.par + 1 }) }
+
+        let off = HandicapCalculator.evaluate(rounds: rounds, settings: HandicapSettings(mode: .manual, manualIndex: 5.3, isEnabled: false))
+        XCTAssertNil(off.index, "no index to play off when switched off")
+        XCTAssertEqual(off.source, .off)
+        XCTAssertFalse(off.isEnabled)
+        XCTAssertEqual(off.displayIndex, "Off")
+        XCTAssertNotNil(off.calculatedIndex, "rounds still count, ready for switching back on")
+
+        let casual = CasualHandicapCalculator.evaluate(rounds: rounds, gameType: .golf, settings: HandicapSettings(isEnabled: false))
+        XCTAssertNil(casual.index)
+        XCTAssertEqual(casual.source, .off)
+
+        // Settings saved before the switch existed decode as switched on.
+        let legacy = Data(#"{"mode":"manual","manualIndex":11.2,"roundsRequired":5}"#.utf8)
+        let decoded = try JSONDecoder().decode(HandicapSettings.self, from: legacy)
+        XCTAssertTrue(decoded.isEnabled)
+        XCTAssertEqual(decoded.manualIndex, 11.2)
+        XCTAssertEqual(decoded.roundsRequired, 5)
+        let roundTrip = try JSONDecoder().decode(HandicapSettings.self, from: JSONEncoder().encode(HandicapSettings(isEnabled: false)))
+        XCTAssertFalse(roundTrip.isEnabled)
+    }
+
     func testNineHoleRoundsCombineBeforeIndexExists() {
         let nine = testCourse(holes: 9)
         let base = Date(timeIntervalSince1970: 1_700_000_000)

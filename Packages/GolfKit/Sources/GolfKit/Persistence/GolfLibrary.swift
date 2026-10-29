@@ -205,6 +205,7 @@ public struct GolfLibrary: Codable, Hashable, Sendable {
     public mutating func removeSampleData() {
         rounds.removeAll { $0.notes == DemoData.sampleMarker && $0.id != inProgressRoundID }
         matchHistory.removeAll { $0.snapshot.match.code == "DEMO" }
+        tournaments.removeAll { $0.tournament.code == "DEMO" }
         hasSampleData = false
     }
 }

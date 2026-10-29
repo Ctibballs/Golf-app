@@ -260,8 +260,27 @@ struct HandicapSummary: View {
 
     var body: some View {
         let golf = app.handicap(for: .golf)
+        if golf.isEnabled {
+            summary(golf)
+        } else {
+            Button(action: action) {
+                HStack(alignment: .firstTextBaseline) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Eyebrow("Handicap")
+                        Text("Off").font(.display(30, weight: .regular)).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Text("Turn on in Profile").font(.subheadline.weight(.medium)).foregroundStyle(Theme.fairway)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(PressableStyle())
+        }
+    }
+
+    private func summary(_ golf: HandicapResult) -> some View {
         let history = golf.history.suffix(12).map(\.index)
-        Button(action: action) {
+        return Button(action: action) {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
                     Eyebrow("Handicap index")
@@ -287,7 +306,7 @@ struct HandicapSummary: View {
                             .padding(.bottom, 10)
                     }
                 }
-                if golf.index == nil {
+                if golf.source == .notEstablished {
                     Text("\(golf.roundsUntilEstablished) more round\(golf.roundsUntilEstablished == 1 ? "" : "s") to establish your index")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
@@ -320,6 +339,7 @@ struct HandicapSummary: View {
         case .manual: return "Manual"
         case .calculated: return "WHS · \(result.eligibleRounds) scores"
         case .notEstablished: return "Pending"
+        case .off: return "Off"
         }
     }
 }

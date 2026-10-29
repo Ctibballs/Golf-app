@@ -124,6 +124,11 @@ struct RoundSetupView: View {
             }
             .tint(Theme.fairway)
             .padding(.vertical, 12)
+            if useHandicaps && !app.handicap(for: course.gameType).isEnabled {
+                Label("Your handicap is switched off, so you'll play off scratch.", systemImage: "info.circle")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
             if !app.isOnline {
                 Label("Offline demo: simulated friends will join your lobby. Set up online play in Settings to play real friends.", systemImage: "wifi.slash")
                     .font(.footnote)

@@ -53,9 +53,12 @@ public struct HandicapResult: Hashable, Sendable {
         case manual
         case calculated
         case notEstablished
+        /// The player has switched their handicap off.
+        case off
     }
 
-    /// The index to use for play: manual if set, otherwise calculated.
+    /// The index to use for play: manual if set, otherwise calculated. Nil when the
+    /// handicap is off or not yet established.
     public var index: Double?
     /// The index calculated from rounds, even when a manual index overrides it.
     public var calculatedIndex: Double?
@@ -68,9 +71,20 @@ public struct HandicapResult: Hashable, Sendable {
 
     public var roundsUntilEstablished: Int { max(0, roundsRequired - eligibleRounds) }
 
+    public var isEnabled: Bool { source != .off }
+
     public var displayIndex: String {
+        if source == .off { return "Off" }
         guard let index else { return "—" }
         return HandicapCalculator.format(index)
+    }
+}
+
+extension HandicapResult {
+    static func source(settings: HandicapSettings, manual: Double?, calculated: Double?) -> Source {
+        guard settings.isEnabled else { return .off }
+        if manual != nil { return .manual }
+        return calculated != nil ? .calculated : .notEstablished
     }
 }
 
@@ -242,8 +256,8 @@ public enum HandicapCalculator {
         }
 
         let manual = settings.mode == .manual ? settings.manualIndex : nil
-        let index = manual ?? calculated
-        let source: HandicapResult.Source = manual != nil ? .manual : (calculated != nil ? .calculated : .notEstablished)
+        let index = settings.isEnabled ? manual ?? calculated : nil
+        let source = HandicapResult.source(settings: settings, manual: manual, calculated: calculated)
 
         return HandicapResult(
             index: index,
@@ -319,9 +333,9 @@ public enum CasualHandicapCalculator {
 
         let manual = settings.mode == .manual ? settings.manualIndex : nil
         return HandicapResult(
-            index: manual ?? calculated,
+            index: settings.isEnabled ? manual ?? calculated : nil,
             calculatedIndex: calculated,
-            source: manual != nil ? .manual : (calculated != nil ? .calculated : .notEstablished),
+            source: HandicapResult.source(settings: settings, manual: manual, calculated: calculated),
             differentials: marked,
             eligibleRounds: diffs.count,
             roundsRequired: settings.roundsRequired,

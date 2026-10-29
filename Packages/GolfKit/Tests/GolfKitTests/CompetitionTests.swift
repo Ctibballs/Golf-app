@@ -132,6 +132,72 @@ final class TournamentStandingsTests: XCTestCase {
     }
 }
 
+final class TrophyCabinetTests: XCTestCase {
+    private func entrant(_ name: String) -> TournamentEntrant {
+        TournamentEntrant(id: UUID(), name: name, avatar: Avatar(emoji: "🦊", colorIndex: 0))
+    }
+
+    private func card(_ e: TournamentEntrant, _ strokes: [Int]) -> Participant {
+        var p = Participant(id: e.id, name: e.name, avatar: e.avatar)
+        for (i, s) in strokes.enumerated() { p.setScore(HoleScore(holeNumber: i + 1, strokes: s)) }
+        return p
+    }
+
+    private func event(_ name: String, status: TournamentStatus, entrants: [TournamentEntrant], cards: [Participant], finishedAt: Date) -> TournamentSnapshot {
+        let course = testCourse(holes: 9)
+        let match = Match(code: "BCDF", hostID: entrants[0].id, name: name, course: course,
+                          status: status == .finished ? .finished : .live, startedAt: finishedAt.addingTimeInterval(-3600),
+                          finishedAt: status == .finished ? finishedAt : nil, roundNumber: 1)
+        let tournament = Tournament(code: "LMNP", name: name, hostID: entrants[0].id, useHandicaps: false,
+                                    rounds: [TournamentRound(number: 1, course: course, matchID: match.id, status: match.status)],
+                                    status: status)
+        return TournamentSnapshot(tournament: tournament, entrants: entrants, rounds: [1: MatchSnapshot(match: match, participants: cards)])
+    }
+
+    func testTrophiesFollowFinishingPositions() {
+        let ann = entrant("Ann"), ben = entrant("Ben"), cat = entrant("Cat"), dan = entrant("Dan"), eve = entrant("Eve")
+        let base = Date(timeIntervalSince1970: 1_800_000_000)
+        let par = [4, 4, 3, 5, 4, 4, 3, 4, 5]
+        let finished = event("Club Champs", status: .finished, entrants: [ann, ben, cat, dan, eve], cards: [
+            card(ann, par.map { $0 + 1 }),   // +9
+            card(ben, par),                  // E, wins
+            card(cat, par.map { $0 + 2 }),   // +18
+            card(dan, par.map { $0 + 3 }),   // +27
+            // Eve entered but never played.
+        ], finishedAt: base)
+        let live = event("Midweek Medal", status: .inProgress, entrants: [ann, ben], cards: [card(ann, [4, 4]), card(ben, [5])], finishedAt: base.addingTimeInterval(86_400))
+
+        let annCabinet = TrophyCabinet.build(for: ann.id, from: [finished, live])
+        XCTAssertEqual(annCabinet.eventsEntered, 2)
+        XCTAssertEqual(annCabinet.entries.first?.name, "Midweek Medal", "most recent first")
+        XCTAssertNil(annCabinet.inProgress.first?.trophy)
+        XCTAssertEqual(annCabinet.finished.first?.trophy, .runnerUp)
+        XCTAssertEqual(annCabinet.finished.first?.leaderName, "Ben")
+        XCTAssertEqual(annCabinet.finished.first?.fieldSize, 4)
+        XCTAssertEqual(annCabinet.podiums, 1)
+        XCTAssertEqual(annCabinet.titles, 0)
+
+        let benCabinet = TrophyCabinet.build(for: ben.id, from: [finished])
+        XCTAssertEqual(benCabinet.titles, 1)
+        XCTAssertNil(benCabinet.entries.first?.leaderName)
+        XCTAssertEqual(benCabinet.bestFinish?.position, 1)
+
+        XCTAssertEqual(TrophyCabinet.build(for: cat.id, from: [finished]).entries.first?.trophy, .thirdPlace)
+        XCTAssertEqual(TrophyCabinet.build(for: dan.id, from: [finished]).entries.first?.trophy, .finisher)
+        let eveEntry = TrophyCabinet.build(for: eve.id, from: [finished]).entries.first
+        XCTAssertEqual(eveEntry?.trophy, .entered)
+        XCTAssertNil(eveEntry?.position)
+        XCTAssertNil(TrophyCabinet.build(for: eve.id, from: [finished]).bestFinish)
+
+        // Someone who isn't in an event has nothing from it.
+        XCTAssertTrue(TrophyCabinet.build(for: UUID(), from: [finished, live]).isEmpty)
+
+        // Winning a field of one isn't a title.
+        let solo = event("Solo Cup", status: .finished, entrants: [ann, ben], cards: [card(ann, par)], finishedAt: base)
+        XCTAssertEqual(TrophyCabinet.build(for: ann.id, from: [solo]).entries.first?.trophy, .finisher)
+    }
+}
+
 final class InMemoryMatchServiceTests: XCTestCase {
     final class Clock: @unchecked Sendable {
         private let lock = NSLock()

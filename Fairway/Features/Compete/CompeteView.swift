@@ -75,6 +75,17 @@ struct CompeteView: View {
                     }
                     .buttonStyle(PressableStyle())
                 }
+                Hairline()
+                NavigationLink {
+                    TrophyCabinetView()
+                } label: {
+                    NavigationRowLabel(
+                        title: "Your trophy cabinet",
+                        subtitle: TrophyCabinetRow.summary(TrophyCabinet.build(for: app.profile.id, from: app.library.tournaments)),
+                        systemImage: "trophy"
+                    )
+                }
+                .buttonStyle(PressableStyle())
             }
         }
     }

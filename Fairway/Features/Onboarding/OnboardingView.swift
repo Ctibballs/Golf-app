@@ -10,6 +10,7 @@ struct OnboardingView: View {
     @State private var avatar = Avatar(emoji: "🏌️", colorIndex: 0)
     @State private var units: UnitSystem = .default
     @State private var handicapMode: HandicapMode = .automatic
+    @State private var handicapOn = true
     @State private var manualIndex = 18.0
     @State private var roundsRequired = 3
     @State private var loadSample = true
@@ -195,16 +196,29 @@ struct OnboardingView: View {
         VStack(alignment: .leading, spacing: 20) {
             Spacer()
             Text("Your handicap").font(.display(30))
-            Picker("Handicap", selection: $handicapMode) {
-                Text("Work it out for me").tag(HandicapMode.automatic)
-                Text("I have one").tag(HandicapMode.manual)
+            VStack(spacing: 0) {
+                RadioRow(title: "Work it out for me", subtitle: "An index from your rounds", systemImage: "chart.line.uptrend.xyaxis",
+                         isSelected: handicapOn && handicapMode == .automatic) {
+                    handicapOn = true
+                    handicapMode = .automatic
+                }
+                Hairline().padding(.leading, 38)
+                RadioRow(title: "I have one", subtitle: "Enter your official index", systemImage: "number",
+                         isSelected: handicapOn && handicapMode == .manual) {
+                    handicapOn = true
+                    handicapMode = .manual
+                }
+                Hairline().padding(.leading, 38)
+                RadioRow(title: "No handicap", subtitle: "Play off scratch; switch it on any time", systemImage: "minus.circle",
+                         isSelected: !handicapOn) {
+                    handicapOn = false
+                }
             }
-            .pickerStyle(.segmented)
+            .overlay(alignment: .top) { Hairline() }
+            .overlay(alignment: .bottom) { Hairline() }
 
-            if handicapMode == .automatic {
+            if handicapOn && handicapMode == .automatic {
                 VStack(alignment: .leading, spacing: 14) {
-                    Text("Fairway calculates a World Handicap System index once you've played enough rounds.")
-                        .foregroundStyle(.secondary)
                     Stepper(value: $roundsRequired, in: HandicapSettings.minimumRounds...HandicapSettings.maximumRounds) {
                         Text("After \(roundsRequired) rounds").font(.body.weight(.medium)).monospacedDigit()
                     }
@@ -213,7 +227,7 @@ struct OnboardingView: View {
                     .overlay(alignment: .bottom) { Hairline() }
                 }
                 .transition(.opacity)
-            } else {
+            } else if handicapOn {
                 VStack(alignment: .leading, spacing: 10) {
                     Text(HandicapCalculator.format(manualIndex))
                         .font(.display(72, weight: .regular))
@@ -229,6 +243,7 @@ struct OnboardingView: View {
             Spacer()
         }
         .animation(.snappySpring, value: handicapMode)
+        .animation(.snappySpring, value: handicapOn)
     }
 
     // MARK: - Footer
@@ -268,7 +283,8 @@ struct OnboardingView: View {
         let settings = HandicapSettings(
             mode: handicapMode,
             manualIndex: handicapMode == .manual ? HandicapCalculator.roundToTenth(manualIndex) : nil,
-            roundsRequired: roundsRequired
+            roundsRequired: roundsRequired,
+            isEnabled: handicapOn
         )
         let profile = PlayerProfile(
             name: name.trimmingCharacters(in: .whitespaces),

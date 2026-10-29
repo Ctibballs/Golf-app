@@ -37,6 +37,9 @@ public enum HandicapMode: String, Codable, CaseIterable, Identifiable, Sendable 
 }
 
 public struct HandicapSettings: Codable, Hashable, Sendable {
+    /// When false the player has no handicap: nothing is shown, and they play off
+    /// scratch in net games. Rounds are still recorded, so turning it back on is instant.
+    public var isEnabled: Bool
     public var mode: HandicapMode
     public var manualIndex: Double?
     /// Rounds needed before an automatic handicap is generated. WHS minimum is 3.
@@ -45,10 +48,25 @@ public struct HandicapSettings: Codable, Hashable, Sendable {
     public static let minimumRounds = 3
     public static let maximumRounds = 20
 
-    public init(mode: HandicapMode = .automatic, manualIndex: Double? = nil, roundsRequired: Int = 3) {
+    public init(mode: HandicapMode = .automatic, manualIndex: Double? = nil, roundsRequired: Int = 3, isEnabled: Bool = true) {
+        self.isEnabled = isEnabled
         self.mode = mode
         self.manualIndex = manualIndex
         self.roundsRequired = min(Self.maximumRounds, max(Self.minimumRounds, roundsRequired))
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case isEnabled, mode, manualIndex, roundsRequired
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        // Libraries saved before the on/off switch existed had handicaps on.
+        isEnabled = try c.decodeIfPresent(Bool.self, forKey: .isEnabled) ?? true
+        mode = try c.decodeIfPresent(HandicapMode.self, forKey: .mode) ?? .automatic
+        manualIndex = try c.decodeIfPresent(Double.self, forKey: .manualIndex)
+        let rounds = try c.decodeIfPresent(Int.self, forKey: .roundsRequired) ?? Self.minimumRounds
+        roundsRequired = min(Self.maximumRounds, max(Self.minimumRounds, rounds))
     }
 }
 

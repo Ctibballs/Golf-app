@@ -1,7 +1,7 @@
 import SwiftUI
 import GolfKit
 
-struct ScorecardPlayerRow: Identifiable {
+struct ScorecardPlayerRow: Identifiable, Equatable {
     let id: UUID
     let name: String
     var avatar: Avatar?
@@ -18,19 +18,27 @@ struct ScorecardGrid: View {
     var showsLengths = true
     var highlightedHole: Int?
     let units: UnitFormatter
+    /// Off when drawing into an image, where a scroll view would clip the card.
+    var scrolls = true
 
     private let cellWidth: CGFloat = 34
     private let labelWidth: CGFloat = 70
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 18) {
-                ForEach(Array(segments.enumerated()), id: \.offset) { index, segment in
-                    segmentGrid(segment, totalLabel: segments.count == 1 ? "Tot" : (index == 0 ? "Out" : "In"), isLast: index == segments.count - 1)
-                }
-            }
-            .padding(.vertical, 4)
+        if scrolls {
+            ScrollView(.horizontal, showsIndicators: false) { grids }
+        } else {
+            grids
         }
+    }
+
+    private var grids: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            ForEach(Array(segments.enumerated()), id: \.offset) { index, segment in
+                segmentGrid(segment, totalLabel: segments.count == 1 ? "Tot" : (index == 0 ? "Out" : "In"), isLast: index == segments.count - 1)
+            }
+        }
+        .padding(.vertical, 4)
     }
 
     private var segments: [[Int]] {

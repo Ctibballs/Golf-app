@@ -100,10 +100,11 @@ public enum DemoData {
 
     // MARK: - Sample history
 
-    /// A few months of rounds and matches so stats screens have something to show.
-    public static func sampleHistory(for profile: PlayerProfile, handicap: Double = 13.5, now: Date = Date()) -> (rounds: [Round], matches: [MatchRecord]) {
+    /// A few months of rounds, matches and tournaments so stats screens have something to show.
+    public static func sampleHistory(for profile: PlayerProfile, handicap: Double = 13.5, now: Date = Date()) -> (rounds: [Round], matches: [MatchRecord], tournaments: [TournamentSnapshot]) {
         var rounds: [Round] = []
         var matches: [MatchRecord] = []
+        var tournaments: [TournamentSnapshot] = []
         let day: TimeInterval = 86_400
 
         func play(_ participant: Participant, course: Course, holes: [Int], tee: TeeSet?, date: Date, salt: Int) -> [HoleScore] {
@@ -179,8 +180,128 @@ public enum DemoData {
             rounds.append(participants[0].round(in: match))
         }
 
+        // Tournaments with a spread of finishes, so the trophy cabinet has a bit of everything.
+        let events: [SampleTournament] = [
+            SampleTournament(name: "Spring Classic", course: golfCourse, tee: golfTee, format: .strokePlay, useHandicaps: true,
+                             field: [0, 1, 2], daysAgo: [86, 85], finish: 1),
+            SampleTournament(name: "Summer Medal", course: golfCourse, tee: golfTee, format: .strokePlay, useHandicaps: false,
+                             field: [3, 0, 1], daysAgo: [62, 61], finish: 2),
+            SampleTournament(name: "Pirate Cove Cup", course: miniGolfCourse, tee: nil, format: .strokePlay, useHandicaps: false,
+                             field: [1, 2, 0], daysAgo: [23], finish: 3),
+            SampleTournament(name: "Autumn Stableford", course: golfCourse, tee: golfTee, format: .stableford, useHandicaps: true,
+                             field: [0, 1, 2, 3], daysAgo: [8], finish: 4),
+        ]
+        for (i, event) in events.enumerated() {
+            let built = sampleTournament(event, me: me, now: now, salt: 400 + i * 10)
+            tournaments.append(built.snapshot)
+            rounds += built.myRounds
+        }
+
         for i in rounds.indices { rounds[i].notes = sampleMarker }
-        return (rounds.sorted { $0.date > $1.date }, matches.sorted { $0.savedAt > $1.savedAt })
+        return (rounds.sorted { $0.date > $1.date }, matches.sorted { $0.savedAt > $1.savedAt }, tournaments.sorted { $0.tournament.createdAt > $1.tournament.createdAt })
+    }
+
+    struct SampleTournament {
+        var name: String
+        var course: Course
+        var tee: TeeSet?
+        var format: ScoringFormat
+        var useHandicaps: Bool
+        /// Indexes into `friends`.
+        var field: [Int]
+        var daysAgo: [Double]
+        /// Where the player should finish.
+        var finish: Int
+    }
+
+    /// Plays out a finished tournament with bots, then nudges the player's scores until
+    /// they finish where the sample wants them.
+    static func sampleTournament(_ event: SampleTournament, me: Participant, now: Date, salt: Int) -> (snapshot: TournamentSnapshot, myRounds: [Round]) {
+        let day: TimeInterval = 86_400
+        let tournamentID = UUID()
+        let players = [me] + event.field.map { friends[$0] }
+        let entrants = players.map { TournamentEntrant(id: $0.id, name: $0.name, avatar: $0.avatar, handicapIndex: $0.handicapIndex) }
+
+        var matches: [Match] = []
+        var cards: [[Participant]] = []
+        for (n, daysAgo) in event.daysAgo.enumerated() {
+            let date = now.addingTimeInterval(-daysAgo * day + 9 * 3600)
+            let match = Match(
+                code: "DEMO", hostID: me.id, name: "\(event.name) · Round \(n + 1)", course: event.course, tee: event.tee,
+                format: event.format, useHandicaps: event.useHandicaps, status: .finished,
+                createdAt: date, startedAt: date, finishedAt: date.addingTimeInterval(4.5 * 3600),
+                tournamentID: tournamentID, roundNumber: n + 1
+            )
+            matches.append(match)
+            cards.append(players.map { player in
+                var card = player
+                card.scores = match.holeNumbers.compactMap { number in
+                    event.course.hole(number).map {
+                        BotGolfer.holeScore(playerID: player.id, handicap: player.handicapIndex, hole: $0, gameType: event.course.gameType,
+                                            layout: nil, salt: salt + n, startTime: date.addingTimeInterval(Double(number) * 720))
+                    }
+                }
+                card.isFinished = true
+                card.currentHole = nil
+                return card
+            })
+        }
+
+        let firstDate = matches.first?.createdAt ?? now
+        let tournament = Tournament(
+            id: tournamentID, code: "DEMO", name: event.name, hostID: me.id, gameType: event.course.gameType,
+            format: event.format, useHandicaps: event.useHandicaps,
+            rounds: matches.enumerated().map { n, match in
+                TournamentRound(number: n + 1, course: event.course, tee: event.tee, scheduledDate: match.createdAt,
+                                matchID: match.id, matchCode: match.code, status: .finished)
+            },
+            status: .finished, createdAt: firstDate.addingTimeInterval(-3 * day)
+        )
+
+        func snapshot() -> TournamentSnapshot {
+            var rounds: [Int: MatchSnapshot] = [:]
+            for (n, match) in matches.enumerated() {
+                rounds[n + 1] = MatchSnapshot(match: match, participants: cards[n])
+            }
+            return TournamentSnapshot(tournament: tournament, entrants: entrants, rounds: rounds)
+        }
+
+        // Separate any bots tied with each other, so every finishing position is reachable.
+        for step in 0..<60 {
+            let others = TournamentStandings.compute(snapshot()).filter { $0.entrant.id != me.id }
+            guard let tied = others.first(where: { a in others.contains { $0.entrant.id != a.entrant.id && $0.position == a.position } }),
+                  let index = players.firstIndex(where: { $0.id == tied.entrant.id }) else { break }
+            let round = step % cards.count
+            cards[round][index] = nudged(cards[round][index], course: event.course, better: false)
+        }
+        // Then move the player a stroke at a time until they land in the right place.
+        for step in 0..<160 {
+            guard let position = TournamentStandings.compute(snapshot()).first(where: { $0.entrant.id == me.id })?.position,
+                  position != event.finish else { break }
+            let round = step % cards.count
+            cards[round][0] = nudged(cards[round][0], course: event.course, better: position > event.finish)
+        }
+        return (snapshot(), matches.enumerated().map { n, match in cards[n][0].round(in: match) })
+    }
+
+    /// Takes a stroke off the worst hole, or adds one to the best.
+    static func nudged(_ card: Participant, course: Course, better: Bool) -> Participant {
+        var card = card
+        func toPar(_ score: HoleScore) -> Int { score.strokes - (course.hole(score.holeNumber)?.par ?? 3) }
+        let cap = course.gameType.maxStrokesPerHole ?? .max
+        let candidates = card.scores.indices.filter { better ? card.scores[$0].strokes > 1 : card.scores[$0].strokes < cap }
+        guard let index = better
+            ? candidates.max(by: { toPar(card.scores[$0]) < toPar(card.scores[$1]) })
+            : candidates.min(by: { toPar(card.scores[$0]) < toPar(card.scores[$1]) })
+        else { return card }
+
+        var score = card.scores[index]
+        score.strokes += better ? -1 : 1
+        if let putts = score.putts { score.putts = min(putts, max(0, score.strokes - 1)) }
+        score.penalties = min(score.penalties, max(0, score.strokes - 1 - (score.putts ?? 0)))
+        score.sandShots = min(score.sandShots, max(0, score.strokes - 1 - (score.putts ?? 0) - score.penalties))
+        card.scores[index] = score
+        return card
     }
 
     // MARK: - Layout generation

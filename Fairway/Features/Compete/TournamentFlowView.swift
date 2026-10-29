@@ -242,10 +242,8 @@ struct TournamentFlowView: View {
         busy = true
         defer { busy = false }
         do {
+            // The app announces the result (and the trophy) once the update lands.
             try await session.finishRound(number)
-            if session.tournament.status == .finished {
-                app.show(Banner(title: "Tournament complete", message: TournamentStandings.compute(session.snapshot).first.map { "\($0.entrant.name) wins!" }, style: .celebration))
-            }
         } catch {
             app.showError(error)
         }
@@ -366,6 +364,7 @@ struct TournamentPlayerView: View {
                 if let standing = TournamentStandings.compute(snapshot).first(where: { $0.id == entrantID }) {
                     VStack(alignment: .leading, spacing: Theme.sectionSpacing) {
                         header(standing)
+                        cabinetLink(standing)
                         VStack(alignment: .leading, spacing: 4) {
                             SectionHeader(title: "Scoring")
                             MetricGrid(items: statItems(standing), columns: 3)
@@ -413,6 +412,25 @@ struct TournamentPlayerView: View {
             }
             Spacer()
             Text(standing.statusText).font(.display(34, weight: .regular))
+        }
+    }
+
+    /// This player's record across every tournament on this device.
+    private func cabinetLink(_ standing: TournamentStanding) -> some View {
+        let tournaments = app.library.tournaments.filter { $0.id != snapshot.id } + [snapshot]
+        let cabinet = TrophyCabinet.build(for: entrantID, from: tournaments)
+        return VStack(alignment: .leading, spacing: 4) {
+            SectionHeader(title: "Trophy cabinet")
+            NavigationLink {
+                TrophyCabinetView(playerID: entrantID, playerName: standing.entrant.name, avatar: standing.entrant.avatar)
+            } label: {
+                NavigationRowLabel(
+                    title: TrophyCabinetRow.summary(cabinet),
+                    subtitle: cabinet.bestFinish.map { "Best finish: \(Ordinal.text($0.position, label: $0.positionLabel)) in \($0.name)" },
+                    systemImage: "trophy"
+                )
+            }
+            .buttonStyle(PressableStyle())
         }
     }
 

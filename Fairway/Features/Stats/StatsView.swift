@@ -73,7 +73,7 @@ private struct OverviewStats: View {
         } else {
             VStack(alignment: .leading, spacing: Theme.sectionSpacing) {
                 MetricGrid(items: [
-                    MetricItem(label: "Handicap", value: handicap.displayIndex, detail: handicap.source == .manual ? "Manual" : "\(handicap.eligibleRounds) scores"),
+                    MetricItem(label: "Handicap", value: handicap.displayIndex, detail: handicapDetail(handicap)),
                     MetricItem(label: "Scoring avg", value: stats.scoringAverage.map { String(format: "%.1f", $0) } ?? "—", detail: "Per 18 holes"),
                     MetricItem(label: "Best round", value: stats.bestRound.map { "\($0.totalStrokes)" } ?? "—", detail: stats.bestRound.map { "\(Leaderboard.formatToPar($0.toPar)) · \($0.course.name)" }),
                     MetricItem(label: "Rounds", value: "\(stats.rounds)", detail: "\(stats.scoring.holesPlayed) holes"),
@@ -117,6 +117,14 @@ private struct OverviewStats: View {
                 }
             }
         }
+    }
+}
+
+private func handicapDetail(_ result: HandicapResult) -> String {
+    switch result.source {
+    case .manual: return "Manual"
+    case .off: return "Switched off"
+    case .calculated, .notEstablished: return "\(result.eligibleRounds) scores"
     }
 }
 

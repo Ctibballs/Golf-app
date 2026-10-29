@@ -26,7 +26,7 @@ struct ProfileView: View {
                     .foregroundStyle(.primary)
                 }
 
-                Section("Handicap") {
+                Section {
                     ForEach(GameType.allCases) { type in
                         NavigationLink {
                             HandicapView(gameType: type)
@@ -35,13 +35,26 @@ struct ProfileView: View {
                             HStack {
                                 Label(type.displayName, systemImage: type.symbolName)
                                 Spacer()
-                                if result.index == nil {
+                                if result.source == .notEstablished {
                                     Text("\(result.roundsUntilEstablished) to go").font(.caption).foregroundStyle(.secondary)
                                 }
                                 Text(result.displayIndex)
                                     .font(.figure(17, weight: .semibold))
+                                    .foregroundStyle(result.isEnabled ? .primary : .secondary)
                             }
                         }
+                    }
+                } header: {
+                    Text("Handicap")
+                } footer: {
+                    Text("Open a game to switch its handicap on or off, or to enter your official index.")
+                }
+
+                Section("Trophies") {
+                    NavigationLink {
+                        TrophyCabinetView()
+                    } label: {
+                        TrophyCabinetRow()
                     }
                 }
 

@@ -31,9 +31,17 @@ struct MatchFlowView: View {
                         RoundSummaryView(roundID: id, session: session) { app.presentation = nil }
                     } else {
                         NavigationStack {
-                            ScrollView { MatchResultsSection(session: session).padding(.horizontal, Theme.gutter) }
-                                .background(Theme.background)
-                                .toolbar { Button("Done") { app.presentation = nil } }
+                            ScrollView {
+                                let model = ResultsCardModel(snapshot: session.snapshot)
+                                VStack(alignment: .leading, spacing: 16) {
+                                    ResultsCard(model: model, units: app.units)
+                                    ShareScorecardButton(model: model, units: app.units)
+                                        .buttonStyle(SecondaryButtonStyle(tint: Theme.fairway))
+                                }
+                                .padding(.horizontal, Theme.gutter)
+                            }
+                            .background(Theme.background)
+                            .toolbar { Button("Done") { app.presentation = nil } }
                         }
                     }
                 }
@@ -224,7 +232,7 @@ struct LobbyView: View {
     private func playerDetail(_ player: Participant) -> String {
         if player.isGuest { return "Guest" }
         if let index = player.handicapIndex { return "Handicap \(HandicapCalculator.format(index))" }
-        return "No handicap yet"
+        return session.match.useHandicaps ? "No handicap · plays off scratch" : "No handicap"
     }
 
     @ViewBuilder

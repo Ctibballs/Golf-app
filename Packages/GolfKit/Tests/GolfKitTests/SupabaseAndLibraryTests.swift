@@ -212,8 +212,15 @@ final class DemoAndLibraryTests: XCTestCase {
         let history = DemoData.sampleHistory(for: profile, now: Date(timeIntervalSince1970: 1_800_000_000))
         XCTAssertGreaterThan(history.rounds.count, 10)
         XCTAssertEqual(history.matches.count, 6)
+        XCTAssertEqual(history.tournaments.count, 4)
 
-        var library = GolfLibrary(profile: profile, rounds: history.rounds, matchHistory: history.matches, hasSampleData: true)
+        // Sample tournaments finish where they're meant to: a win, a second, a third, a fourth.
+        let cabinet = TrophyCabinet.build(for: profile.id, from: history.tournaments)
+        XCTAssertEqual(cabinet.eventsEntered, 4)
+        XCTAssertEqual(cabinet.titles, 1)
+        XCTAssertEqual(cabinet.entries.compactMap(\.position).sorted(), [1, 2, 3, 4])
+
+        var library = GolfLibrary(profile: profile, rounds: history.rounds, matchHistory: history.matches, tournaments: history.tournaments, hasSampleData: true)
         let golf = library.handicap(for: .golf)
         XCTAssertEqual(golf.source, .calculated)
         XCTAssertNotNil(golf.index)
@@ -227,6 +234,7 @@ final class DemoAndLibraryTests: XCTestCase {
         library.removeSampleData()
         XCTAssertTrue(library.rounds.isEmpty)
         XCTAssertTrue(library.matchHistory.isEmpty)
+        XCTAssertTrue(library.tournaments.isEmpty)
     }
 
     func testLibraryRoundTripsThroughDisk() async throws {
