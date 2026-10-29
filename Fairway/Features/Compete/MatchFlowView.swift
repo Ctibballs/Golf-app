@@ -37,10 +37,26 @@ struct MatchFlowView: View {
                     }
                 }
             } else if let loadError {
-                VStack(spacing: 16) {
+                VStack(spacing: 12) {
                     EmptyStateView(title: "Couldn't open game", message: loadError, systemImage: "wifi.exclamationmark")
-                    Button("Close") { app.presentation = nil }.buttonStyle(SecondaryButtonStyle()).padding(.horizontal, 60)
+                    if let round = app.library.rounds.first(where: { $0.matchID == matchID && !$0.isComplete }) {
+                        // Offline demo games don't survive a relaunch; your own card does.
+                        Button("Keep scoring on this phone") { app.present(.round(round.id)) }
+                            .buttonStyle(PrimaryButtonStyle())
+                    }
+                    if let game = app.library.activeGames.first(where: { $0.id == matchID }) {
+                        Button("Remove this game", role: .destructive) {
+                            Task {
+                                await app.leave(game)
+                                app.presentation = nil
+                            }
+                        }
+                        .buttonStyle(SecondaryButtonStyle(tint: Theme.flag))
+                    }
+                    Button("Close") { app.presentation = nil }
+                        .buttonStyle(SecondaryButtonStyle())
                 }
+                .padding(.horizontal, 40)
             } else {
                 ProgressView("Connecting…").controlSize(.large)
             }
