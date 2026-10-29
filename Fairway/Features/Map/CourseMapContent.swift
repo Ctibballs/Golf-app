@@ -10,6 +10,7 @@ enum MapPalette {
     static let sand = Color(hex: 0xF1DDA8)
     static let water = Color(hex: 0x3D9BFF)
     static let path = Color.white
+    static let shot = Color(hex: 0xFFD45E)
 
     /// One colour per player in multi-player replays.
     static let players: [Color] = [Color(hex: 0xFFD45E), Color(hex: 0xFF5A4E), Color(hex: 0x4FA3FF), Color(hex: 0xC56CF0), Color(hex: 0x14B8A6), Color(hex: 0xFF8A3D)]
@@ -94,8 +95,8 @@ struct HoleNumberBadge: View {
 
     var body: some View {
         Text("\(number)")
-            .font(.system(size: isFocused ? 13 : 10, weight: .heavy, design: .rounded))
-            .foregroundStyle(isFocused ? Theme.deepGreen : .white)
+            .font(.system(size: isFocused ? 13 : 10, weight: .semibold).monospacedDigit())
+            .foregroundStyle(isFocused ? Color.black : .white)
             .frame(width: isFocused ? 26 : 18, height: isFocused ? 26 : 18)
             .background(isFocused ? Color.white : Color.black.opacity(0.55), in: Circle())
             .overlay(Circle().strokeBorder(.white.opacity(0.8), lineWidth: 1))
@@ -128,7 +129,7 @@ struct BallMarker: View {
             Circle().strokeBorder(.black.opacity(0.35), lineWidth: 1)
             if let label {
                 Text(label)
-                    .font(.system(size: size * 0.55, weight: .heavy, design: .rounded))
+                    .font(.system(size: size * 0.52, weight: .bold).monospacedDigit())
                     .foregroundStyle(.black.opacity(0.75))
             }
         }
@@ -144,11 +145,11 @@ struct DistanceCallout: View {
 
     var body: some View {
         Text(text)
-            .font(.caption2.weight(.heavy))
+            .font(.caption2.weight(.semibold).monospacedDigit())
             .foregroundStyle(.white)
             .padding(.horizontal, 6)
             .padding(.vertical, 3)
-            .background(tint.opacity(0.7), in: Capsule())
+            .background(tint.opacity(0.72), in: RoundedRectangle(cornerRadius: 4, style: .continuous))
     }
 }
 

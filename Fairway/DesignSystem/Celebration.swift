@@ -1,87 +1,55 @@
 import SwiftUI
 
-/// A short confetti burst for birdies, personal bests and wins. Drawn with Canvas so it
-/// stays cheap even with lots of pieces.
-struct ConfettiView: View {
-    let trigger: Int
-    var pieces = 70
-
-    @State private var startDate: Date?
-    private let duration: TimeInterval = 2.4
-    private static let colors: [Color] = [Theme.flag, Theme.gold, Theme.lime, Theme.water, .white, Theme.fairway]
-
-    var body: some View {
-        TimelineView(.animation(paused: startDate == nil)) { timeline in
-            Canvas { context, size in
-                guard let start = startDate else { return }
-                let t = timeline.date.timeIntervalSince(start)
-                guard t < duration else { return }
-                for i in 0..<pieces {
-                    var rng = SeededRandom(seed: UInt64(i + 1) &* 2654435761 &+ UInt64(trigger))
-                    let originX: Double = Double(size.width) * (0.2 + 0.6 * rng.next())
-                    let velocityX: Double = (rng.next() - 0.5) * 420
-                    let velocityY: Double = -(380 + rng.next() * 420)
-                    let gravity: Double = 900
-                    let x: Double = originX + velocityX * t
-                    let y: Double = Double(size.height) * 0.45 + velocityY * t + 0.5 * gravity * t * t
-                    let spin = Angle.degrees(rng.next() * 360 + t * 540 * (rng.next() > 0.5 ? 1 : -1))
-                    let fade: Double = max(0, 1 - t / duration)
-                    let w: Double = 6 + rng.next() * 6
-                    let h: Double = 4 + rng.next() * 8
-
-                    context.opacity = fade
-                    context.translateBy(x: x, y: y)
-                    context.rotate(by: spin)
-                    let rect = CGRect(x: -w / 2, y: -h / 2, width: w, height: h)
-                    let color = Self.colors[Int(rng.next() * Double(Self.colors.count)) % Self.colors.count]
-                    context.fill(Path(roundedRect: rect, cornerRadius: 1.5), with: .color(color))
-                    context.rotate(by: -spin)
-                    context.translateBy(x: -x, y: -y)
-                }
-            }
-        }
-        .allowsHitTesting(false)
-        .onChange(of: trigger) {
-            startDate = Date()
-        }
-    }
-}
-
-/// Tiny deterministic generator so each confetti piece keeps its path between frames.
-struct SeededRandom {
-    private var state: UInt64
-
-    init(seed: UInt64) { state = seed == 0 ? 0x9E3779B97F4A7C15 : seed }
-
-    mutating func next() -> Double {
-        state ^= state << 13
-        state ^= state >> 7
-        state ^= state << 17
-        return Double(state % 10_000) / 10_000
-    }
-}
-
-/// A banner that drops in from the top for a moment ("Birdie!").
+/// A toast that drops in for a moment on birdies and personal bests.
 struct CelebrationBanner: View {
     let title: String
     let subtitle: String
     var systemImage = "sparkles"
 
     var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: systemImage)
-                .font(.title2.weight(.bold))
-                .foregroundStyle(Theme.gold)
-                .symbolEffect(.pulse)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.headline)
-                Text(subtitle).font(.subheadline).foregroundStyle(.secondary)
+        ToastView(title: title, message: subtitle, systemImage: systemImage, iconColor: Theme.OnToast.celebration)
+    }
+}
+
+/// The logo: a flag on a pin that waves gently.
+struct FlagMark: View {
+    var poleColor: Color = .primary
+    var animated = true
+
+    var body: some View {
+        TimelineView(.animation(paused: !animated)) { timeline in
+            let t = animated ? timeline.date.timeIntervalSinceReferenceDate : 0
+            Canvas { context, size in
+                let w = Double(size.width), h = Double(size.height)
+                let poleX: Double = w * 0.32
+                let poleWidth: Double = max(2, w * 0.035)
+                let pole = Path(roundedRect: CGRect(x: poleX - poleWidth / 2, y: h * 0.06, width: poleWidth, height: h * 0.84), cornerRadius: poleWidth / 2)
+                context.fill(pole, with: .color(poleColor))
+
+                var flag = Path()
+                let top: Double = h * 0.07
+                let length: Double = w * 0.56
+                let height: Double = h * 0.3
+                let left = poleX + poleWidth / 2
+                flag.move(to: CGPoint(x: left, y: top))
+                let steps = 24
+                for i in 0...steps {
+                    let f = Double(i) / Double(steps)
+                    let wave: Double = sin(f * 4.5 + t * 3) * 0.035 * h * f
+                    flag.addLine(to: CGPoint(x: left + length * f, y: top + height * 0.5 * f + wave))
+                }
+                for i in stride(from: steps, through: 0, by: -1) {
+                    let f = Double(i) / Double(steps)
+                    let wave: Double = sin(f * 4.5 + t * 3) * 0.035 * h * f
+                    flag.addLine(to: CGPoint(x: left + length * f, y: top + height - height * 0.5 * f + wave))
+                }
+                flag.closeSubpath()
+                context.fill(flag, with: .color(Theme.flag))
+
+                let cup = Path(ellipseIn: CGRect(x: poleX - w * 0.2, y: h * 0.88, width: w * 0.4, height: h * 0.07))
+                context.fill(cup, with: .color(poleColor.opacity(0.18)))
             }
-            Spacer(minLength: 0)
         }
-        .padding(14)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .shadow(color: .black.opacity(0.15), radius: 14, y: 6)
-        .padding(.horizontal)
+        .accessibilityHidden(true)
     }
 }

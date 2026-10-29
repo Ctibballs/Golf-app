@@ -18,139 +18,175 @@ struct OnboardingView: View {
     private let steps = 4
 
     var body: some View {
-        ZStack {
-            Theme.heroGradient.ignoresSafeArea()
-            FloatingBalls().ignoresSafeArea()
+        VStack(spacing: 0) {
+            StepBar(count: steps, current: step)
+                .padding(.top, 12)
 
-            VStack(spacing: 0) {
-                ProgressDots(count: steps, current: step)
-                    .padding(.top, 12)
-
-                ZStack {
-                    switch step {
-                    case 0: welcome
-                    case 1: identity
-                    case 2: preferences
-                    default: handicap
-                    }
+            ZStack {
+                switch step {
+                case 0: welcome
+                case 1: identity
+                case 2: preferences
+                default: handicap
                 }
-                .frame(maxHeight: .infinity)
-                .transition(.asymmetric(insertion: .push(from: .trailing), removal: .push(from: .leading)))
-                .id(step)
-
-                footer
             }
-            .padding(.horizontal, 24)
-            .padding(.bottom, 12)
+            .frame(maxHeight: .infinity)
+            .transition(.asymmetric(insertion: .push(from: .trailing), removal: .push(from: .leading)))
+            .id(step)
+
+            footer
         }
-        .foregroundStyle(.white)
+        .padding(.horizontal, 24)
+        .padding(.bottom, 12)
+        .background(Theme.background)
     }
 
     // MARK: - Steps
 
     private var welcome: some View {
-        VStack(spacing: 22) {
+        VStack(alignment: .leading, spacing: 20) {
             Spacer()
             FlagMark()
-                .frame(width: 140, height: 160)
-            Text("Fairway")
-                .font(.rounded(52, weight: .heavy))
-            Text("Track every shot, play friends with a four-letter code, run tournaments and watch your round replay on the map.")
-                .font(.title3)
-                .multilineTextAlignment(.center)
-                .opacity(0.9)
-            HStack(spacing: 10) {
-                ForEach(GameType.allCases) { type in
-                    InfoPill(text: type.displayName, systemImage: type.symbolName, tint: .white)
-                }
+                .frame(width: 64, height: 78)
+                .reveal(0)
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Fairway")
+                    .font(.display(54))
+                Text("Your round, measured. Play friends with a four-letter code, run tournaments and watch every shot replay on the map.")
+                    .font(.title3)
+                    .foregroundStyle(.secondary)
             }
+            .reveal(1)
+            VStack(alignment: .leading, spacing: 0) {
+                feature("location", "GPS shot tracking", "Distances to the green and every shot measured")
+                Hairline().padding(.leading, 40)
+                feature("person.2", "Matches and tournaments", "Friends join with a code, like a party game")
+                Hairline().padding(.leading, 40)
+                feature("chart.xyaxis.line", "Stats and handicap", "Per course, per hole and head to head")
+            }
+            .overlay(alignment: .top) { Hairline() }
+            .padding(.top, 8)
+            .reveal(2)
             Spacer()
         }
     }
 
-    private var identity: some View {
-        VStack(spacing: 24) {
-            Spacer()
-            AvatarView(avatar: avatar, size: 110, showsRing: true)
-                .shadow(radius: 12)
-                .scaleEffect(name.isEmpty ? 1 : 1.05)
-                .animation(.playful, value: avatar)
-            Text("What should we call you?")
-                .font(.title2.weight(.bold))
-            TextField("", text: $name, prompt: Text("Your name").foregroundStyle(.white.opacity(0.6)))
-                .font(.title3.weight(.semibold))
-                .multilineTextAlignment(.center)
-                .padding(.vertical, 14)
-                .background(.white.opacity(0.18), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                .focused($nameFocused)
-                .submitLabel(.done)
-                .textInputAutocapitalization(.words)
+    private func feature(_ systemImage: String, _ title: String, _ subtitle: String) -> some View {
+        HStack(spacing: 16) {
+            Image(systemName: systemImage)
+                .font(.body)
+                .foregroundStyle(Theme.fairway)
+                .frame(width: 24)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.body.weight(.medium))
+                Text(subtitle).font(.footnote).foregroundStyle(.secondary)
+            }
+        }
+        .padding(.vertical, 12)
+    }
 
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 8), spacing: 10) {
-                ForEach(Avatar.emojiChoices, id: \.self) { emoji in
-                    Button {
-                        avatar.emoji = emoji
-                    } label: {
-                        Text(emoji)
-                            .font(.title2)
-                            .frame(width: 38, height: 38)
-                            .background(.white.opacity(avatar.emoji == emoji ? 0.35 : 0.1), in: Circle())
+    private var identity: some View {
+        VStack(alignment: .leading, spacing: 22) {
+            Spacer()
+            Text("What should we call you?")
+                .font(.display(30))
+            HStack(spacing: 16) {
+                AvatarView(avatar: avatar, size: 72)
+                    .animation(.snappySpring, value: avatar)
+                VStack(alignment: .leading, spacing: 6) {
+                    TextField("", text: $name, prompt: Text("Your name"))
+                        .font(.title2)
+                        .focused($nameFocused)
+                        .submitLabel(.done)
+                        .textInputAutocapitalization(.words)
+                    Hairline()
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 12) {
+                Eyebrow("Avatar")
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 8), spacing: 10) {
+                    ForEach(Avatar.emojiChoices, id: \.self) { emoji in
+                        Button {
+                            avatar.emoji = emoji
+                        } label: {
+                            Text(emoji)
+                                .font(.title2)
+                                .frame(width: 38, height: 38)
+                                .overlay(Circle().strokeBorder(avatar.emoji == emoji ? Theme.fairway : .clear, lineWidth: 1.5))
+                        }
+                        .buttonStyle(PressableStyle())
                     }
-                    .buttonStyle(PressableStyle())
+                }
+                HStack(spacing: 10) {
+                    ForEach(0..<Theme.avatarPalette.count, id: \.self) { index in
+                        Circle()
+                            .fill(Theme.avatarColor(index))
+                            .frame(width: 24, height: 24)
+                            .padding(3)
+                            .overlay(Circle().strokeBorder(Color.primary, lineWidth: avatar.colorIndex == index ? 1.5 : 0))
+                            .onTapGesture { avatar.colorIndex = index }
+                    }
                 }
             }
-            HStack(spacing: 10) {
-                ForEach(0..<Theme.avatarPalette.count, id: \.self) { index in
-                    Circle()
-                        .fill(Theme.avatarColor(index))
-                        .frame(width: 28, height: 28)
-                        .overlay(Circle().strokeBorder(.white, lineWidth: avatar.colorIndex == index ? 3 : 0))
-                        .onTapGesture { avatar.colorIndex = index }
-                }
-            }
+            .padding(.top, 6)
             Spacer()
         }
         .onAppear { nameFocused = true }
     }
 
     private var preferences: some View {
-        VStack(alignment: .leading, spacing: 22) {
+        VStack(alignment: .leading, spacing: 20) {
             Spacer()
-            Text("Distances").font(.title2.weight(.bold))
-            Text("Metric is the default. You can switch any time in Settings.")
-                .opacity(0.85)
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Distances").font(.display(30))
+                Text("Metric is the default. You can switch any time in Settings.")
+                    .foregroundStyle(.secondary)
+            }
             HStack(spacing: 12) {
                 ForEach(UnitSystem.allCases) { system in
+                    let selected = units == system
                     Button {
                         units = system
                     } label: {
-                        VStack(spacing: 6) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack {
+                                Text(system.displayName).font(.subheadline.weight(.semibold))
+                                Spacer()
+                                Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                                    .foregroundStyle(selected ? Theme.fairway : Color.secondary.opacity(0.5))
+                                    .contentTransition(.symbolEffect(.replace))
+                            }
                             Text(system == .metric ? "152 m" : "166 yd")
-                                .font(.rounded(26, weight: .bold))
-                            Text(system.displayName).font(.subheadline.weight(.semibold))
-                            Text(system == .metric ? "metres · °C · km/h" : "yards · °F · mph")
-                                .font(.caption).opacity(0.8)
+                                .font(.display(30, weight: .regular))
+                            Text(system == .metric ? "Metres · °C · km/h" : "Yards · °F · mph")
+                                .font(.caption).foregroundStyle(.secondary)
                         }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 18)
-                        .background(.white.opacity(units == system ? 0.28 : 0.1), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(.white.opacity(units == system ? 0.9 : 0), lineWidth: 2))
+                        .foregroundStyle(.primary)
+                        .padding(16)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: Theme.corner, style: .continuous)
+                                .strokeBorder(selected ? Theme.fairway : Theme.outline, lineWidth: selected ? 1.5 : 1)
+                        )
                     }
                     .buttonStyle(PressableStyle())
+                    .sensoryFeedback(.selection, trigger: selected)
                 }
             }
-            .animation(.snappySpring, value: units)
+            .animation(.easeOut(duration: 0.2), value: units)
 
             Toggle(isOn: $loadSample) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Explore with sample rounds").font(.headline)
+                    Text("Explore with sample rounds").font(.body.weight(.medium))
                     Text("Adds a few months of demo rounds and matches so the stats screens have something to show. Remove them any time.")
-                        .font(.caption).opacity(0.85)
+                        .font(.footnote).foregroundStyle(.secondary)
                 }
             }
-            .tint(Theme.lime)
-            .padding(16)
-            .background(.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .tint(Theme.fairway)
+            .padding(.vertical, 14)
+            .overlay(alignment: .top) { Hairline() }
+            .overlay(alignment: .bottom) { Hairline() }
             Spacer()
         }
     }
@@ -158,40 +194,37 @@ struct OnboardingView: View {
     private var handicap: some View {
         VStack(alignment: .leading, spacing: 20) {
             Spacer()
-            Text("Your handicap").font(.title2.weight(.bold))
+            Text("Your handicap").font(.display(30))
             Picker("Handicap", selection: $handicapMode) {
                 Text("Work it out for me").tag(HandicapMode.automatic)
                 Text("I have one").tag(HandicapMode.manual)
             }
             .pickerStyle(.segmented)
-            .environment(\.colorScheme, .dark)
 
             if handicapMode == .automatic {
-                VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: 14) {
                     Text("Fairway calculates a World Handicap System index once you've played enough rounds.")
-                        .opacity(0.9)
+                        .foregroundStyle(.secondary)
                     Stepper(value: $roundsRequired, in: HandicapSettings.minimumRounds...HandicapSettings.maximumRounds) {
-                        Text("After \(roundsRequired) rounds").font(.headline)
+                        Text("After \(roundsRequired) rounds").font(.body.weight(.medium)).monospacedDigit()
                     }
+                    .padding(.vertical, 10)
+                    .overlay(alignment: .top) { Hairline() }
+                    .overlay(alignment: .bottom) { Hairline() }
                 }
-                .padding(16)
-                .background(.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-                .transition(.move(edge: .leading).combined(with: .opacity))
+                .transition(.opacity)
             } else {
-                VStack(spacing: 8) {
+                VStack(alignment: .leading, spacing: 10) {
                     Text(HandicapCalculator.format(manualIndex))
-                        .font(.rounded(64, weight: .heavy))
+                        .font(.display(72, weight: .regular))
                         .contentTransition(.numericText(value: manualIndex))
                         .animation(.snappySpring, value: manualIndex)
                     Slider(value: $manualIndex, in: -5...54, step: 0.1)
-                        .tint(Theme.lime)
-                    Text("Drag to set your index · plus handicaps shown with +")
-                        .font(.caption).opacity(0.8)
+                        .tint(Theme.fairway)
+                    Text("Drag to set your index. Plus handicaps are shown with a +.")
+                        .font(.footnote).foregroundStyle(.secondary)
                 }
-                .frame(maxWidth: .infinity)
-                .padding(16)
-                .background(.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-                .transition(.move(edge: .trailing).combined(with: .opacity))
+                .transition(.opacity)
             }
             Spacer()
         }
@@ -207,26 +240,20 @@ struct OnboardingView: View {
                     withAnimation(.snappySpring) { step -= 1 }
                 } label: {
                     Image(systemName: "chevron.left")
-                        .font(.headline)
-                        .frame(width: 54, height: 54)
-                        .background(.white.opacity(0.18), in: Circle())
                 }
-                .buttonStyle(PressableStyle())
-                .transition(.scale.combined(with: .opacity))
+                .buttonStyle(CircleIconButtonStyle(size: 52))
+                .transition(.opacity.combined(with: .move(edge: .leading)))
             }
             Button {
                 advance()
             } label: {
-                Text(step == steps - 1 ? "Tee off" : "Continue")
-                    .font(.headline)
-                    .foregroundStyle(Theme.deepGreen)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 54)
-                    .background(.white, in: Capsule())
+                HStack {
+                    Text(step == steps - 1 ? "Tee off" : "Continue")
+                    Image(systemName: "arrow.right")
+                }
             }
-            .buttonStyle(PressableStyle())
+            .buttonStyle(PrimaryButtonStyle())
             .disabled(step == 1 && name.trimmingCharacters(in: .whitespaces).isEmpty)
-            .opacity(step == 1 && name.trimmingCharacters(in: .whitespaces).isEmpty ? 0.6 : 1)
         }
         .animation(.snappySpring, value: step)
         .sensoryFeedback(.selection, trigger: step)
@@ -257,7 +284,8 @@ struct OnboardingView: View {
     }
 }
 
-private struct ProgressDots: View {
+/// Thin segments that fill in as you move through onboarding.
+private struct StepBar: View {
     let count: Int
     let current: Int
 
@@ -265,66 +293,10 @@ private struct ProgressDots: View {
         HStack(spacing: 6) {
             ForEach(0..<count, id: \.self) { index in
                 Capsule()
-                    .fill(.white.opacity(index <= current ? 1 : 0.35))
-                    .frame(width: index == current ? 26 : 8, height: 8)
+                    .fill(index <= current ? Color.primary : Theme.fill)
+                    .frame(height: 3)
             }
         }
-        .animation(.snappySpring, value: current)
-    }
-}
-
-/// The logo: a flag that waves gently.
-struct FlagMark: View {
-    var body: some View {
-        TimelineView(.animation) { timeline in
-            let t = timeline.date.timeIntervalSinceReferenceDate
-            Canvas { context, size in
-                let w = Double(size.width), h = Double(size.height)
-                let poleX: Double = w * 0.35
-                let pole = Path(roundedRect: CGRect(x: poleX - 3, y: h * 0.05, width: 6, height: h * 0.85), cornerRadius: 3)
-                context.fill(pole, with: .color(.white))
-
-                var flag = Path()
-                let top: Double = h * 0.07
-                let length: Double = w * 0.55
-                let height: Double = h * 0.32
-                flag.move(to: CGPoint(x: poleX + 3, y: top))
-                let steps = 24
-                for i in 0...steps {
-                    let f = Double(i) / Double(steps)
-                    let wave: Double = sin(f * 5 + t * 4) * 6 * f
-                    flag.addLine(to: CGPoint(x: poleX + 3 + length * f, y: top + height * 0.5 * f + wave))
-                }
-                for i in stride(from: steps, through: 0, by: -1) {
-                    let f = Double(i) / Double(steps)
-                    let wave: Double = sin(f * 5 + t * 4) * 6 * f
-                    flag.addLine(to: CGPoint(x: poleX + 3 + length * f, y: top + height - height * 0.5 * f + wave))
-                }
-                flag.closeSubpath()
-                context.fill(flag, with: .color(Theme.flag))
-
-                let hole = Path(ellipseIn: CGRect(x: poleX - 28, y: h * 0.86, width: 56, height: 14))
-                context.fill(hole, with: .color(.black.opacity(0.35)))
-            }
-        }
-    }
-}
-
-/// Soft golf balls drifting in the background.
-struct FloatingBalls: View {
-    var body: some View {
-        TimelineView(.animation(minimumInterval: 1 / 30)) { timeline in
-            let t = timeline.date.timeIntervalSinceReferenceDate
-            Canvas { context, size in
-                for i in 0..<9 {
-                    let seed = Double(i) * 1.7
-                    let x = (sin(seed * 3.1 + t * 0.07) * 0.5 + 0.5) * Double(size.width)
-                    let y = (cos(seed * 2.3 + t * 0.05) * 0.5 + 0.5) * Double(size.height)
-                    let r = 18 + (sin(seed) * 0.5 + 0.5) * 36
-                    context.fill(Path(ellipseIn: CGRect(x: x - r, y: y - r, width: r * 2, height: r * 2)), with: .color(.white.opacity(0.06)))
-                }
-            }
-        }
-        .allowsHitTesting(false)
+        .animation(.easeOut(duration: 0.3), value: current)
     }
 }

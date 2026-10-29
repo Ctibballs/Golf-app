@@ -68,72 +68,68 @@ struct TournamentFlowView: View {
     private func dashboard(_ snapshot: TournamentSnapshot) -> some View {
         let standings = TournamentStandings.compute(snapshot)
         return ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                header(snapshot)
-                roundsStrip(snapshot)
-                controls(snapshot)
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        SectionHeader(title: "Leaderboard", subtitle: snapshot.tournament.useHandicaps ? "Net \(snapshot.tournament.format.displayName.lowercased())" : snapshot.tournament.format.displayName)
+            VStack(alignment: .leading, spacing: Theme.sectionSpacing) {
+                header(snapshot).reveal(0)
+                VStack(alignment: .leading, spacing: 18) {
+                    roundsList(snapshot)
+                    controls(snapshot)
+                }
+                .reveal(1)
+                VStack(alignment: .leading, spacing: 4) {
+                    SectionHeader(title: "Leaderboard", subtitle: snapshot.tournament.useHandicaps ? "Net \(snapshot.tournament.format.displayName.lowercased())" : snapshot.tournament.format.displayName) {
                         if snapshot.tournament.status == .inProgress { LiveBadge() }
                     }
                     StandingsTable(standings: standings, tournament: snapshot.tournament, myID: app.profile.id) { selectedEntrant = $0 }
                 }
+                .reveal(2)
                 if let leader = standings.first, leader.holesPlayed > 0 {
-                    LeaderCard(standing: leader)
+                    LeaderSummary(standing: leader)
                 }
             }
-            .padding()
+            .padding(.horizontal, Theme.gutter)
+            .padding(.bottom, 32)
             .animation(.snappySpring, value: standings.map(\.id))
         }
         .refreshable { await session?.refresh() }
     }
 
     private func header(_ snapshot: TournamentSnapshot) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Image(systemName: "trophy.fill").font(.title2)
-                Text(snapshot.tournament.name).font(.rounded(26, weight: .heavy)).lineLimit(2)
-            }
-            HStack(spacing: 8) {
-                InfoPill(text: snapshot.tournament.gameType.displayName, systemImage: snapshot.tournament.gameType.symbolName, tint: .white)
-                InfoPill(text: "\(snapshot.entrants.count) players", systemImage: "person.2.fill", tint: .white)
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 6) {
+                Eyebrow("Tournament · \(snapshot.tournament.gameType.displayName) · \(snapshot.entrants.count) players")
+                Text(snapshot.tournament.name).font(.display(32)).lineLimit(2)
             }
             if snapshot.tournament.status != .finished {
-                HStack(spacing: 12) {
+                HStack(alignment: .center, spacing: 16) {
                     CodeTiles(code: snapshot.tournament.code, tileSize: 40)
-                    Text("Share this code\nso friends can enter")
-                        .font(.caption.weight(.semibold))
-                        .opacity(0.85)
+                    Text("Share this code so friends can enter.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                 }
             }
         }
-        .foregroundStyle(.white)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(18)
-        .background(Theme.goldGradient, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .padding(.top, 4)
     }
 
-    private func roundsStrip(_ snapshot: TournamentSnapshot) -> some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
-                ForEach(snapshot.tournament.rounds) { round in
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Round \(round.number)").font(.subheadline.weight(.bold))
-                        Text(round.course?.name ?? "TBC").font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                        Group {
-                            switch round.status {
-                            case .live: LiveBadge()
-                            case .finished: InfoPill(text: "Complete", systemImage: "checkmark", tint: Theme.fairway)
-                            default: InfoPill(text: "Upcoming", tint: .secondary)
-                            }
-                        }
+    private func roundsList(_ snapshot: TournamentSnapshot) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            SectionHeader(title: "Rounds")
+            DividedList(snapshot.tournament.rounds) { round in
+                HStack(spacing: 14) {
+                    Text("R\(round.number)")
+                        .font(.figure(15, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 30, alignment: .leading)
+                    Text(round.course?.name ?? "Course to be confirmed").font(.body.weight(.medium)).lineLimit(1)
+                    Spacer()
+                    switch round.status {
+                    case .live: LiveBadge()
+                    case .finished: Eyebrow("Complete", color: Theme.fairway)
+                    default: Eyebrow("Upcoming")
                     }
-                    .frame(width: 150, alignment: .leading)
-                    .cardStyle(padding: 12)
                 }
+                .padding(.vertical, 12)
             }
-            .padding(2)
         }
     }
 
@@ -150,19 +146,21 @@ struct TournamentFlowView: View {
                     .buttonStyle(PrimaryButtonStyle())
                     .disabled(busy)
 
-                    Button { showMap = true } label: {
-                        Label("Where is everyone?", systemImage: "map.fill")
-                    }
-                    .buttonStyle(SecondaryButtonStyle(tint: Theme.water))
-
-                    if session.isHost {
-                        Button {
-                            Task { await finishRound(live.number) }
-                        } label: {
-                            Label(live.number == snapshot.tournament.rounds.count ? "Finish tournament" : "Close round \(live.number)", systemImage: "flag.checkered")
+                    HStack(spacing: 10) {
+                        Button { showMap = true } label: {
+                            Label("Where is everyone?", systemImage: "map")
                         }
-                        .buttonStyle(SecondaryButtonStyle(tint: Theme.flag))
-                        .disabled(busy)
+                        .buttonStyle(SecondaryButtonStyle())
+
+                        if session.isHost {
+                            Button {
+                                Task { await finishRound(live.number) }
+                            } label: {
+                                Text(live.number == snapshot.tournament.rounds.count ? "Finish event" : "Close round \(live.number)")
+                            }
+                            .buttonStyle(SecondaryButtonStyle(tint: Theme.flag))
+                            .disabled(busy)
+                        }
                     }
                 } else if let next = session.nextRound {
                     if session.isHost {
@@ -170,23 +168,24 @@ struct TournamentFlowView: View {
                             Task { await startRound(next.number) }
                         } label: {
                             HStack {
-                                if busy { ProgressView().tint(.white) }
+                                if busy { ProgressView().tint(Theme.onAccent) }
                                 Label("Start round \(next.number)", systemImage: "play.fill")
                             }
                         }
-                        .buttonStyle(PrimaryButtonStyle(gradient: Theme.goldGradient))
+                        .buttonStyle(PrimaryButtonStyle())
                         .disabled(busy)
                     } else {
                         Label("Waiting for the host to start round \(next.number)", systemImage: "hourglass")
-                            .font(.subheadline.weight(.semibold))
+                            .font(.subheadline)
                             .foregroundStyle(.secondary)
-                            .frame(maxWidth: .infinity)
-                            .cardStyle()
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
                 if !app.isOnline {
                     Text("Demo mode: simulated friends play each round alongside you.")
-                        .font(.caption).foregroundStyle(.secondary)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
         }
@@ -263,58 +262,59 @@ struct StandingsTable: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
-                Text("POS").frame(width: 36, alignment: .leading)
+            HStack(spacing: 0) {
+                Text("POS").frame(width: 38, alignment: .leading)
                 Text("PLAYER")
                 Spacer()
-                Text("TODAY").frame(width: 56)
-                Text("THRU").frame(width: 46)
-                Text(tournament.format == .stableford ? "PTS" : "TOTAL").frame(width: 56, alignment: .trailing)
+                Text("TODAY").frame(width: 52, alignment: .trailing)
+                Text("THRU").frame(width: 44, alignment: .trailing)
+                Text(tournament.format == .stableford ? "PTS" : "TOTAL").frame(width: 58, alignment: .trailing)
             }
-            .font(.caption2.weight(.heavy))
+            .font(.eyebrow)
+            .tracking(0.8)
             .foregroundStyle(.secondary)
-            .padding(.horizontal, 12)
             .padding(.vertical, 8)
+            Hairline()
 
             ForEach(standings) { standing in
                 Button { onSelect(standing) } label: {
-                    HStack {
+                    HStack(spacing: 0) {
                         Text(standing.positionLabel)
-                            .font(.subheadline.weight(.bold).monospacedDigit())
+                            .font(.figure(15, weight: .semibold))
                             .foregroundStyle(standing.position == 1 && standing.holesPlayed > 0 ? Theme.gold : .primary)
-                            .frame(width: 36, alignment: .leading)
-                        AvatarView(avatar: standing.entrant.avatar, size: 30, showsRing: standing.id == myID)
+                            .frame(width: 38, alignment: .leading)
+                        AvatarView(avatar: standing.entrant.avatar, size: 28, showsRing: standing.id == myID)
+                            .padding(.trailing, 10)
                         VStack(alignment: .leading, spacing: 1) {
-                            Text(standing.entrant.name).font(.subheadline.weight(.semibold)).lineLimit(1)
+                            Text(standing.entrant.name).font(.body.weight(standing.id == myID ? .semibold : .medium)).lineLimit(1)
                             if standing.isPlaying, let hole = standing.currentHole {
-                                Label("On hole \(hole)", systemImage: "flag.fill")
-                                    .font(.caption2.weight(.semibold))
+                                Text("On hole \(hole)")
+                                    .font(.caption)
                                     .foregroundStyle(Theme.fairway)
                             }
                         }
-                        Spacer()
+                        Spacer(minLength: 4)
                         Text(standing.today.map(Leaderboard.formatToPar) ?? "–")
-                            .font(.subheadline.monospacedDigit())
+                            .font(.figure(15))
                             .foregroundStyle((standing.today ?? 0) < 0 ? Theme.flag : .primary)
-                            .frame(width: 56)
+                            .frame(width: 52, alignment: .trailing)
                         Text(thruText(standing))
-                            .font(.caption.monospacedDigit())
+                            .font(.figure(14))
                             .foregroundStyle(.secondary)
-                            .frame(width: 46)
+                            .frame(width: 44, alignment: .trailing)
                         Text(standing.statusText)
-                            .font(.headline.monospacedDigit())
+                            .font(.figure(17, weight: .semibold))
                             .contentTransition(.numericText())
-                            .frame(width: 56, alignment: .trailing)
+                            .frame(width: 58, alignment: .trailing)
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 10)
-                    .background(standing.id == myID ? Theme.fairway.opacity(0.08) : .clear)
+                    .foregroundStyle(.primary)
+                    .padding(.vertical, 11)
+                    .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
-                Divider().padding(.leading, 48)
+                .buttonStyle(PressableStyle())
+                Hairline()
             }
         }
-        .background(Theme.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 
     private func thruText(_ standing: TournamentStanding) -> String {
@@ -324,24 +324,31 @@ struct StandingsTable: View {
     }
 }
 
-struct LeaderCard: View {
+/// The current leader and how they got there.
+struct LeaderSummary: View {
     let standing: TournamentStanding
 
     var body: some View {
-        HStack(spacing: 14) {
-            AvatarView(avatar: standing.entrant.avatar, size: 54, showsRing: true)
-                .overlay(alignment: .top) {
-                    Image(systemName: "crown.fill").foregroundStyle(Theme.gold).offset(y: -14)
+        VStack(alignment: .leading, spacing: 12) {
+            SectionHeader(title: "Leader")
+            HStack(spacing: 14) {
+                AvatarView(avatar: standing.entrant.avatar, size: 48)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(standing.entrant.name).font(.display(22))
+                    Text(standing.statusText).font(.subheadline).foregroundStyle(.secondary)
                 }
-            VStack(alignment: .leading, spacing: 3) {
-                Text("Leader").font(.caption.weight(.heavy)).foregroundStyle(.secondary)
-                Text(standing.entrant.name).font(.title3.weight(.bold))
-                Text("\(standing.stats.birdiesOrBetter) birdies · GIR \(standing.stats.greensInRegulation.percentText) · \(standing.stats.puttsPerHole.map { String(format: "%.1f putts/hole", $0) } ?? "")")
-                    .font(.caption).foregroundStyle(.secondary)
+                Spacer()
+                Image(systemName: "crown")
+                    .font(.title3)
+                    .foregroundStyle(Theme.gold)
             }
-            Spacer()
+            MetricGrid(items: [
+                MetricItem(label: "Birdies+", value: "\(standing.stats.birdiesOrBetter)"),
+                MetricItem(label: "GIR", value: standing.stats.greensInRegulation.percentText),
+                MetricItem(label: "Putts/hole", value: standing.stats.puttsPerHole.map { String(format: "%.1f", $0) } ?? "—"),
+            ], columns: 3, compact: true)
+            .overlay(alignment: .top) { Hairline() }
         }
-        .cardStyle()
     }
 }
 
@@ -357,15 +364,23 @@ struct TournamentPlayerView: View {
         NavigationStack {
             ScrollView {
                 if let standing = TournamentStandings.compute(snapshot).first(where: { $0.id == entrantID }) {
-                    VStack(alignment: .leading, spacing: 18) {
+                    VStack(alignment: .leading, spacing: Theme.sectionSpacing) {
                         header(standing)
-                        statsGrid(standing)
-                        parAverages(standing)
+                        VStack(alignment: .leading, spacing: 4) {
+                            SectionHeader(title: "Scoring")
+                            MetricGrid(items: statItems(standing), columns: 3)
+                        }
+                        VStack(alignment: .leading, spacing: 4) {
+                            SectionHeader(title: "Average by par")
+                            MetricGrid(items: [3, 4, 5].map { par in
+                                MetricItem(label: "Par \(par)", value: standing.stats.averageStrokes(onPar: par).map { String(format: "%.2f", $0) } ?? "—")
+                            }, columns: 3)
+                        }
                         ForEach(snapshot.tournament.rounds) { round in
                             if let pair = TournamentStandings.scorecard(for: entrantID, round: round.number, in: snapshot) {
                                 let match = pair.0
                                 let card = pair.1
-                                VStack(alignment: .leading, spacing: 8) {
+                                VStack(alignment: .leading, spacing: 12) {
                                     SectionHeader(title: "Round \(round.number)", subtitle: match.course.name)
                                     HoleByHoleChart(match: match, participant: card)
                                     ScorecardGrid(course: match.course, holes: match.holeNumbers, tee: match.tee,
@@ -374,7 +389,8 @@ struct TournamentPlayerView: View {
                             }
                         }
                     }
-                    .padding()
+                    .padding(.horizontal, Theme.gutter)
+                    .padding(.vertical, 12)
                 }
             }
             .background(Theme.background)
@@ -384,45 +400,38 @@ struct TournamentPlayerView: View {
     }
 
     private func header(_ standing: TournamentStanding) -> some View {
-        HStack(spacing: 16) {
-            AvatarView(avatar: standing.entrant.avatar, size: 70, showsRing: true)
+        HStack(alignment: .center, spacing: 16) {
+            AvatarView(avatar: standing.entrant.avatar, size: 60)
             VStack(alignment: .leading, spacing: 4) {
-                Text(standing.entrant.name).font(.title2.weight(.bold))
-                HStack(spacing: 8) {
-                    InfoPill(text: "Position \(standing.positionLabel)", systemImage: "list.number", tint: Theme.gold)
-                    if let index = standing.entrant.handicapIndex {
-                        InfoPill(text: "HCP \(HandicapCalculator.format(index))", tint: .secondary)
-                    }
-                }
+                Text(standing.entrant.name).font(.display(26))
+                Text(headerDetail(standing)).font(.subheadline).foregroundStyle(.secondary)
                 if standing.isPlaying, let hole = standing.currentHole {
                     Label("Playing hole \(hole) · thru \(standing.thru ?? 0)", systemImage: "figure.golf")
-                        .font(.subheadline.weight(.semibold))
+                        .font(.footnote.weight(.medium))
                         .foregroundStyle(Theme.fairway)
                 }
             }
             Spacer()
-            Text(standing.statusText).font(.rounded(32, weight: .heavy))
+            Text(standing.statusText).font(.display(34, weight: .regular))
         }
     }
 
-    private func statsGrid(_ standing: TournamentStanding) -> some View {
+    private func headerDetail(_ standing: TournamentStanding) -> String {
+        var parts = ["Position \(standing.positionLabel)"]
+        if let index = standing.entrant.handicapIndex { parts.append("Handicap \(HandicapCalculator.format(index))") }
+        return parts.joined(separator: " · ")
+    }
+
+    private func statItems(_ standing: TournamentStanding) -> [MetricItem] {
         let s = standing.stats
-        return LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10), GridItem(.flexible())], spacing: 10) {
-            StatTile(title: "Holes", value: "\(s.holesPlayed)", systemImage: "flag")
-            StatTile(title: "Birdies+", value: "\(s.birdiesOrBetter)", systemImage: "bird.fill", tint: Theme.flag)
-            StatTile(title: "Bogey+", value: "\(s.count(.bogey) + s.count(.doubleBogey) + s.count(.tripleOrWorse))", systemImage: "arrow.down.right", tint: Theme.water)
-            StatTile(title: "GIR", value: s.greensInRegulation.percentText, systemImage: "scope")
-            StatTile(title: "Fairways", value: s.fairways.percentText, systemImage: "arrow.up.forward", tint: Theme.lime)
-            StatTile(title: "Putts/hole", value: s.puttsPerHole.map { String(format: "%.2f", $0) } ?? "—", systemImage: "circle.dotted", tint: Theme.water)
-        }
-    }
-
-    private func parAverages(_ standing: TournamentStanding) -> some View {
-        HStack(spacing: 10) {
-            ForEach([3, 4, 5], id: \.self) { par in
-                StatTile(title: "Par \(par) avg", value: standing.stats.averageStrokes(onPar: par).map { String(format: "%.2f", $0) } ?? "—", systemImage: "\(par).circle", tint: Theme.gold)
-            }
-        }
+        return [
+            MetricItem(label: "Holes", value: "\(s.holesPlayed)"),
+            MetricItem(label: "Birdies+", value: "\(s.birdiesOrBetter)", tint: s.birdiesOrBetter > 0 ? Theme.flag : nil),
+            MetricItem(label: "Bogey+", value: "\(s.count(.bogey) + s.count(.doubleBogey) + s.count(.tripleOrWorse))"),
+            MetricItem(label: "GIR", value: s.greensInRegulation.percentText),
+            MetricItem(label: "Fairways", value: s.fairways.percentText),
+            MetricItem(label: "Putts/hole", value: s.puttsPerHole.map { String(format: "%.2f", $0) } ?? "—"),
+        ]
     }
 }
 
@@ -443,18 +452,16 @@ struct HoleByHoleChart: View {
         let points = makePoints()
         if points.count > 1 {
             Chart(points) { point in
-                AreaMark(x: .value("Hole", point.index), y: .value("To par", point.cumulative))
-                    .foregroundStyle(LinearGradient(colors: [Theme.fairway.opacity(0.35), .clear], startPoint: .top, endPoint: .bottom))
-                    .interpolationMethod(.monotone)
+                RuleMark(y: .value("Par", 0))
+                    .foregroundStyle(Theme.hairline)
+                    .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
                 LineMark(x: .value("Hole", point.index), y: .value("To par", point.cumulative))
-                    .foregroundStyle(Theme.fairway)
+                    .foregroundStyle(Color.primary)
+                    .lineStyle(StrokeStyle(lineWidth: 1.5))
                     .interpolationMethod(.monotone)
                 PointMark(x: .value("Hole", point.index), y: .value("To par", point.cumulative))
-                    .foregroundStyle(point.diff < 0 ? Theme.flag : (point.diff == 0 ? Theme.fairway : Theme.water))
-                    .symbolSize(point.diff == 0 ? 20 : 50)
-                RuleMark(y: .value("Par", 0))
-                    .foregroundStyle(.secondary.opacity(0.4))
-                    .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
+                    .foregroundStyle(point.diff < 0 ? Theme.flag : (point.diff == 0 ? Color.primary : Theme.water))
+                    .symbolSize(point.diff == 0 ? 14 : 40)
             }
             .chartYScale(domain: .automatic(includesZero: true, reversed: true))
             .chartXAxis {
@@ -465,7 +472,6 @@ struct HoleByHoleChart: View {
                 }
             }
             .frame(height: 150)
-            .cardStyle()
         }
     }
 

@@ -17,26 +17,24 @@ struct CourseDetailView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 0) {
                 hero
-                if let course {
-                    content(course)
-                } else if let loadError {
-                    EmptyStateView(title: "Couldn't load course", message: loadError, systemImage: "wifi.exclamationmark", actionTitle: "Try again") {
-                        Task { await load() }
+                VStack(alignment: .leading, spacing: Theme.sectionSpacing) {
+                    titleBlock
+                    if let course {
+                        content(course)
+                    } else if let loadError {
+                        EmptyStateView(title: "Couldn't load course", message: loadError, systemImage: "wifi.exclamationmark", actionTitle: "Try again") {
+                            Task { await load() }
+                        }
+                    } else {
+                        SkeletonRows(count: 4)
                     }
-                    .cardStyle()
-                    .padding(.horizontal)
-                } else {
-                    VStack(spacing: 12) {
-                        LoadingCard(height: 60)
-                        LoadingCard(height: 180)
-                        LoadingCard(height: 140)
-                    }
-                    .padding(.horizontal)
                 }
+                .padding(.horizontal, Theme.gutter)
+                .padding(.top, 20)
             }
-            .padding(.bottom, 30)
+            .padding(.bottom, 32)
         }
         .background(Theme.background)
         .ignoresSafeArea(edges: .top)
@@ -49,7 +47,7 @@ struct CourseDetailView: View {
                         app.toggleFavorite(course)
                     } label: {
                         Image(systemName: app.isFavorite(course.id) ? "star.fill" : "star")
-                            .foregroundStyle(Theme.gold)
+                            .foregroundStyle(app.isFavorite(course.id) ? Theme.gold : .primary)
                             .symbolEffect(.bounce, value: favoriteBounce)
                     }
                     .sensoryFeedback(.impact(weight: .light), trigger: favoriteBounce)
@@ -72,85 +70,85 @@ struct CourseDetailView: View {
         course?.tees.first { $0.id == selectedTeeID } ?? course?.defaultTee
     }
 
-    // MARK: - Hero
+    // MARK: - Header
 
     private var hero: some View {
-        ZStack(alignment: .bottomLeading) {
-            Group {
-                if let course, let layout {
-                    CourseOverviewMap(course: course, layout: layout)
-                        .transition(.opacity)
-                } else {
-                    Theme.gradient(for: course?.gameType ?? .golf)
-                        .overlay {
-                            Image(systemName: (course?.gameType ?? .golf).symbolName)
-                                .font(.system(size: 90, weight: .bold))
-                                .foregroundStyle(.white.opacity(0.15))
-                        }
-                }
+        Group {
+            if let course, let layout {
+                CourseOverviewMap(course: course, layout: layout)
+                    .transition(.opacity)
+            } else {
+                Theme.surface
+                    .overlay {
+                        Image(systemName: (course?.gameType ?? .golf).symbolName)
+                            .font(.system(size: 54, weight: .ultraLight))
+                            .foregroundStyle(.tertiary)
+                    }
             }
-            .frame(height: 280)
-            .clipped()
-
-            LinearGradient(colors: [.clear, .black.opacity(0.7)], startPoint: .center, endPoint: .bottom)
-                .frame(height: 280)
-                .allowsHitTesting(false)
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text(course?.name ?? summary.name)
-                    .font(.rounded(30, weight: .heavy))
-                    .lineLimit(2)
-                if !(course?.locality ?? summary.locality).isEmpty {
-                    Label(course?.locality ?? summary.locality, systemImage: "mappin.and.ellipse")
-                        .font(.subheadline.weight(.semibold))
-                        .opacity(0.9)
-                }
-            }
-            .foregroundStyle(.white)
-            .padding(20)
         }
+        .frame(height: 250)
+        .clipped()
+        .overlay(alignment: .bottom) { Hairline() }
         .animation(.easeInOut(duration: 0.6), value: layout != nil)
+    }
+
+    private var titleBlock: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Eyebrow(eyebrowText)
+            Text(course?.name ?? summary.name)
+                .font(.display(30))
+                .lineLimit(3)
+        }
+        .reveal(0)
+    }
+
+    private var eyebrowText: String {
+        let type = (course?.gameType ?? .golf).displayName
+        let locality = course?.locality ?? summary.locality
+        return locality.isEmpty ? type : "\(type) · \(locality)"
     }
 
     // MARK: - Content
 
     @ViewBuilder
     private func content(_ course: Course) -> some View {
-        VStack(alignment: .leading, spacing: 20) {
-            facts(course)
+        VStack(alignment: .leading, spacing: 18) {
+            MetricGrid(items: facts(course), columns: 4, compact: true)
+                .overlay(alignment: .top) { Hairline() }
+                .overlay(alignment: .bottom) { Hairline() }
             actions(course)
-            if let weather {
-                WeatherCard(report: weather, units: app.units)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-            if !course.tees.isEmpty { teePicker(course) }
-            VStack(alignment: .leading, spacing: 10) {
-                SectionHeader(title: "Scorecard", actionTitle: canEdit(course) ? "Edit" : nil) { showEditor = true }
-                ScorecardGrid(course: course, holes: course.holes.map(\.number), tee: selectedTee, units: app.units)
-            }
-            CourseHistorySection(course: course)
-            attribution(course)
         }
-        .padding(.horizontal)
-        .animation(.snappySpring, value: weather?.fetchedAt)
+        .reveal(1)
+        if let weather {
+            VStack(alignment: .leading, spacing: 14) {
+                SectionHeader(title: "Conditions")
+                WeatherPanel(report: weather, units: app.units)
+            }
+            .transition(.opacity)
+        }
+        if !course.tees.isEmpty { teePicker(course) }
+        VStack(alignment: .leading, spacing: 12) {
+            SectionHeader(title: "Scorecard", actionTitle: canEdit(course) ? "Edit" : nil) { showEditor = true }
+            ScorecardGrid(course: course, holes: course.holes.map(\.number), tee: selectedTee, units: app.units)
+        }
+        CourseHistorySection(course: course)
+        attribution(course)
     }
 
-    private func facts(_ course: Course) -> some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                InfoPill(text: course.gameType.displayName, systemImage: course.gameType.symbolName, tint: Theme.tint(for: course.gameType))
-                InfoPill(text: "\(course.holeCount) holes", systemImage: "flag")
-                InfoPill(text: "Par \(course.par)", systemImage: "number")
-                if let length = course.totalLength(for: selectedTee) {
-                    InfoPill(text: app.units.courseLength(length), systemImage: "ruler")
-                }
-                if let tee = selectedTee, let rating = tee.courseRating, let slope = tee.slopeRating {
-                    InfoPill(text: String(format: "%.1f / %d", rating, slope), systemImage: "gauge.with.dots.needle.50percent")
-                }
-                if let year = course.yearBuilt { InfoPill(text: "Est. \(year)", systemImage: "calendar") }
-                if let access = course.accessType { InfoPill(text: access.capitalized, systemImage: "lock.open") }
-            }
+    private func facts(_ course: Course) -> [MetricItem] {
+        var items = [
+            MetricItem(label: "Holes", value: "\(course.holeCount)"),
+            MetricItem(label: "Par", value: "\(course.par)"),
+        ]
+        if let length = course.totalLength(for: selectedTee) {
+            items.append(MetricItem(label: "Length", value: app.units.courseLength(length)))
         }
+        if let tee = selectedTee, let rating = tee.courseRating, let slope = tee.slopeRating {
+            items.append(MetricItem(label: "Rating", value: String(format: "%.1f/%d", rating, slope)))
+        } else if let year = course.yearBuilt {
+            items.append(MetricItem(label: "Opened", value: "\(year)"))
+        }
+        return items
     }
 
     private func actions(_ course: Course) -> some View {
@@ -159,54 +157,52 @@ struct CourseDetailView: View {
                 Button { showSoloSetup = true } label: {
                     Label("Play", systemImage: "play.fill")
                 }
-                .buttonStyle(PrimaryButtonStyle(gradient: Theme.gradient(for: course.gameType)))
+                .buttonStyle(PrimaryButtonStyle())
 
                 Button { showMatchSetup = true } label: {
-                    Label("Host match", systemImage: "person.3.fill")
+                    Label("Host match", systemImage: "person.2")
                 }
-                .buttonStyle(SecondaryButtonStyle(tint: Theme.tint(for: course.gameType)))
+                .buttonStyle(SecondaryButtonStyle())
             }
             if layout != nil {
                 NavigationLink {
                     CourseMapView(course: course)
                 } label: {
-                    Label("Explore the course map", systemImage: "map.fill")
+                    NavigationRowLabel(title: "Course map", subtitle: "Every hole, with distances", systemImage: "map")
                 }
-                .buttonStyle(SecondaryButtonStyle(tint: Theme.water))
+                .buttonStyle(PressableStyle())
+                .overlay(alignment: .bottom) { Hairline() }
             }
         }
     }
 
     private func teePicker(_ course: Course) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 4) {
             SectionHeader(title: "Tees")
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
-                    ForEach(course.tees) { tee in
-                        let selected = tee.id == selectedTee?.id
-                        Button {
-                            withAnimation(.snappySpring) { selectedTeeID = tee.id }
-                        } label: {
-                            HStack(spacing: 8) {
-                                Circle()
-                                    .fill(Color(hexString: tee.colorHex) ?? .gray)
-                                    .frame(width: 14, height: 14)
-                                    .overlay(Circle().strokeBorder(.primary.opacity(0.25), lineWidth: 1))
-                                VStack(alignment: .leading, spacing: 1) {
-                                    Text(tee.name).font(.subheadline.weight(.bold))
-                                    Text(teeDetail(tee)).font(.caption2).foregroundStyle(.secondary)
-                                }
-                            }
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 10)
-                            .background(selected ? Theme.fairway.opacity(0.15) : Theme.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(selected ? Theme.fairway : .clear, lineWidth: 2))
-                        }
-                        .buttonStyle(PressableStyle())
-                        .foregroundStyle(.primary)
+            DividedList(course.tees, inset: 26) { tee in
+                let selected = tee.id == selectedTee?.id
+                Button {
+                    withAnimation(.snappySpring) { selectedTeeID = tee.id }
+                } label: {
+                    HStack(spacing: 14) {
+                        Circle()
+                            .fill(Color(hexString: tee.colorHex) ?? .gray)
+                            .frame(width: 12, height: 12)
+                            .overlay(Circle().strokeBorder(Color.primary.opacity(0.3), lineWidth: 0.5))
+                        Text(tee.name).font(.body.weight(.medium))
+                        Spacer()
+                        Text(teeDetail(tee)).font(.footnote).monospacedDigit().foregroundStyle(.secondary)
+                        Image(systemName: "checkmark")
+                            .font(.footnote.weight(.bold))
+                            .foregroundStyle(Theme.fairway)
+                            .opacity(selected ? 1 : 0)
+                            .scaleEffect(selected ? 1 : 0.5)
                     }
+                    .foregroundStyle(.primary)
+                    .padding(.vertical, 12)
+                    .contentShape(Rectangle())
                 }
-                .padding(2)
+                .buttonStyle(PressableStyle())
             }
         }
     }
@@ -268,19 +264,20 @@ struct CourseHistorySection: View {
     var body: some View {
         let rounds = app.library.completedRounds.filter { $0.course.id == course.id && $0.playerID == app.profile.id }
         if let stats = StatsEngine.courseStats(rounds: rounds).first {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 6) {
                 SectionHeader(title: "Your record here", subtitle: "\(stats.roundsPlayed) round\(stats.roundsPlayed == 1 ? "" : "s")")
-                HStack(spacing: 10) {
-                    StatTile(title: "Best", value: stats.bestRound.map { "\($0.totalStrokes)" } ?? "—", subtitle: stats.bestRound.map { Leaderboard.formatToPar($0.toPar) }, systemImage: "trophy.fill", tint: Theme.gold)
-                    StatTile(title: "Average", value: stats.averageScore.map { String(format: "%.1f", $0) } ?? "—", systemImage: "sum")
-                    StatTile(title: "GIR", value: stats.scoring.greensInRegulation.percentText, systemImage: "scope", tint: Theme.water)
-                }
+                MetricGrid(items: [
+                    MetricItem(label: "Best", value: stats.bestRound.map { "\($0.totalStrokes)" } ?? "—", detail: stats.bestRound.map { Leaderboard.formatToPar($0.toPar) }),
+                    MetricItem(label: "Average", value: stats.averageScore.map { String(format: "%.1f", $0) } ?? "—"),
+                    MetricItem(label: "GIR", value: stats.scoring.greensInRegulation.percentText),
+                ], columns: 3)
+                Hairline()
                 NavigationLink {
                     CourseStatsView(courseID: course.id)
                 } label: {
-                    Label("Hole-by-hole breakdown", systemImage: "square.grid.3x3.fill")
+                    NavigationRowLabel(title: "Hole-by-hole breakdown", systemImage: "square.grid.3x3")
                 }
-                .buttonStyle(SecondaryButtonStyle())
+                .buttonStyle(PressableStyle())
             }
         }
     }

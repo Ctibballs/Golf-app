@@ -12,39 +12,49 @@ struct CourseStatsView: View {
         let rounds = app.library.rounds.filter { $0.course.id == courseID && $0.playerID == app.profile.id }
         ScrollView {
             if let stats = StatsEngine.courseStats(rounds: rounds).first {
-                VStack(alignment: .leading, spacing: 18) {
-                    HStack(spacing: 10) {
-                        StatTile(title: "Rounds", value: "\(stats.roundsPlayed)", systemImage: "flag.fill")
-                        StatTile(title: "Average", value: stats.averageScore.map { String(format: "%.1f", $0) } ?? "—", systemImage: "sum", tint: Theme.water)
-                        StatTile(title: "Best", value: stats.bestRound.map { "\($0.totalStrokes)" } ?? "—", systemImage: "trophy.fill", tint: Theme.gold)
+                VStack(alignment: .leading, spacing: Theme.sectionSpacing) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Eyebrow("Course stats")
+                        Text(stats.courseName).font(.display(28)).lineLimit(2)
+                        MetricGrid(items: [
+                            MetricItem(label: "Rounds", value: "\(stats.roundsPlayed)"),
+                            MetricItem(label: "Average", value: stats.averageScore.map { String(format: "%.1f", $0) } ?? "—"),
+                            MetricItem(label: "Best", value: stats.bestRound.map { "\($0.totalStrokes)" } ?? "—"),
+                        ], columns: 3)
+                        .padding(.top, 8)
+                        .overlay(alignment: .top) { Hairline().padding(.top, 8) }
                     }
+                    .reveal(0)
 
-                    holeGrid(stats)
+                    holeGrid(stats).reveal(1)
 
                     if let hardest = stats.holesByDifficulty.first, let easiest = stats.holesByDifficulty.last, hardest.number != easiest.number {
-                        HStack(spacing: 10) {
-                            extremeCard(title: "Toughest", hole: hardest, tint: Theme.water)
-                            extremeCard(title: "Easiest", hole: easiest, tint: Theme.flag)
+                        VStack(alignment: .leading, spacing: 4) {
+                            SectionHeader(title: "Toughest and easiest")
+                            MetricGrid(items: [
+                                MetricItem(label: "Toughest", value: "Hole \(hardest.number)", detail: "Par \(hardest.par) · avg \(hardest.averageToPar.map { String(format: "%+.2f", $0) } ?? "—")", tint: Theme.water),
+                                MetricItem(label: "Easiest", value: "Hole \(easiest.number)", detail: "Par \(easiest.par) · avg \(easiest.averageToPar.map { String(format: "%+.2f", $0) } ?? "—")", tint: Theme.flag),
+                            ])
                         }
                     }
 
                     holeChart(stats)
 
-                    VStack(alignment: .leading, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 4) {
                         SectionHeader(title: "Rounds here")
-                        ForEach(stats.rounds) { round in
+                        DividedList(stats.rounds) { round in
                             NavigationLink(value: round) { RoundRow(round: round) }
                                 .buttonStyle(PressableStyle())
                         }
                     }
                 }
-                .padding()
+                .padding(.horizontal, Theme.gutter)
+                .padding(.bottom, 32)
             } else {
                 EmptyStateView(title: "No rounds here yet", message: "Play this course to see hole-by-hole stats.")
             }
         }
         .background(Theme.background)
-        .navigationTitle(rounds.first?.course.name ?? "Course")
         .navigationBarTitleDisplayMode(.inline)
         .sheet(item: $selectedHole) { hole in
             HoleStatsSheet(hole: hole)
@@ -52,49 +62,42 @@ struct CourseStatsView: View {
     }
 
     private func holeGrid(_ stats: CourseStats) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            SectionHeader(title: "Hole by hole", subtitle: "Colour shows your average against par")
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 6), spacing: 8) {
+        VStack(alignment: .leading, spacing: 14) {
+            SectionHeader(title: "Hole by hole", subtitle: "Your average score; colour shows how it compares with par")
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 0), count: 6), spacing: 0) {
                 ForEach(stats.holes) { hole in
                     Button { selectedHole = hole } label: {
-                        VStack(spacing: 2) {
-                            Text("\(hole.number)").font(.caption2.weight(.bold)).opacity(0.8)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("\(hole.number)").font(.eyebrow).foregroundStyle(.secondary)
                             Text(hole.averageStrokes.map { String(format: "%.1f", $0) } ?? "–")
-                                .font(.rounded(17, weight: .heavy))
-                            Text("par \(hole.par)").font(.system(size: 9, weight: .semibold)).opacity(0.8)
+                                .font(.figure(17, weight: .semibold))
+                                .foregroundStyle(hole.timesPlayed > 0 ? .primary : .tertiary)
+                            Rectangle()
+                                .fill(HoleHeatStrip.color(hole.averageToPar))
+                                .frame(height: 3)
                         }
-                        .foregroundStyle(hole.timesPlayed > 0 ? .white : .secondary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 8)
-                        .background(HoleHeatStrip.color(hole.averageToPar), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .padding(.vertical, 10)
+                        .padding(.horizontal, 8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .overlay(alignment: .bottom) { Hairline() }
+                        .contentShape(Rectangle())
                     }
                     .buttonStyle(PressableStyle())
+                    .foregroundStyle(.primary)
                 }
             }
         }
     }
 
-    private func extremeCard(title: String, hole: HoleStats, tint: Color) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title.uppercased()).font(.caption2.weight(.heavy)).foregroundStyle(tint)
-            Text("Hole \(hole.number)").font(.title3.weight(.bold))
-            Text("Par \(hole.par) · avg \(hole.averageToPar.map { String(format: "%+.2f", $0) } ?? "—")")
-                .font(.caption).foregroundStyle(.secondary)
-        }
-        .cardStyle()
-    }
-
     private func holeChart(_ stats: CourseStats) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Average over par").font(.headline)
+        VStack(alignment: .leading, spacing: 14) {
+            SectionHeader(title: "Average over par")
             Chart(stats.holes.filter { $0.timesPlayed > 0 }) { hole in
-                BarMark(x: .value("Hole", "\(hole.number)"), y: .value("Over par", hole.averageToPar ?? 0))
+                BarMark(x: .value("Hole", "\(hole.number)"), y: .value("Over par", hole.averageToPar ?? 0), width: .ratio(0.6))
                     .foregroundStyle(HoleHeatStrip.color(hole.averageToPar))
-                    .cornerRadius(3)
             }
             .frame(height: 160)
         }
-        .cardStyle()
     }
 }
 
@@ -102,25 +105,25 @@ struct HoleStatsSheet: View {
     let hole: HoleStats
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Text("Hole \(hole.number)").font(.rounded(30, weight: .heavy))
-                Spacer()
-                InfoPill(text: "Par \(hole.par)", systemImage: "flag")
-                if let si = hole.strokeIndex { InfoPill(text: "S.I. \(si)") }
+        VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 4) {
+                Eyebrow("Par \(hole.par)\(hole.strokeIndex.map { " · stroke index \($0)" } ?? "")")
+                Text("Hole \(hole.number)").font(.display(30))
             }
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible())], spacing: 10) {
-                StatTile(title: "Played", value: "\(hole.timesPlayed)", systemImage: "number")
-                StatTile(title: "Average", value: hole.averageStrokes.map { String(format: "%.2f", $0) } ?? "—", systemImage: "sum", tint: Theme.water)
-                StatTile(title: "Best", value: hole.best.map { "\($0)" } ?? "—", systemImage: "trophy.fill", tint: Theme.gold)
-                StatTile(title: "Putts", value: hole.scoring.puttsPerHole.map { String(format: "%.1f", $0) } ?? "—", systemImage: "circle.dotted", tint: Theme.water)
-                StatTile(title: "GIR", value: hole.scoring.greensInRegulation.percentText, systemImage: "scope")
-                StatTile(title: "Birdies+", value: "\(hole.scoring.birdiesOrBetter)", systemImage: "bird.fill", tint: Theme.flag)
-            }
+            MetricGrid(items: [
+                MetricItem(label: "Played", value: "\(hole.timesPlayed)"),
+                MetricItem(label: "Average", value: hole.averageStrokes.map { String(format: "%.2f", $0) } ?? "—"),
+                MetricItem(label: "Best", value: hole.best.map { "\($0)" } ?? "—"),
+                MetricItem(label: "Putts", value: hole.scoring.puttsPerHole.map { String(format: "%.1f", $0) } ?? "—"),
+                MetricItem(label: "GIR", value: hole.scoring.greensInRegulation.percentText),
+                MetricItem(label: "Birdies+", value: "\(hole.scoring.birdiesOrBetter)"),
+            ], columns: 3)
+            .overlay(alignment: .top) { Hairline() }
             ScoreDistributionBar(stats: hole.scoring)
             Spacer()
         }
-        .padding()
+        .padding(Theme.gutter)
+        .padding(.top, 8)
         .background(Theme.background)
         .presentationDetents([.medium])
         .presentationDragIndicator(.visible)
@@ -135,88 +138,121 @@ struct HeadToHeadView: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 18) {
+            VStack(alignment: .leading, spacing: Theme.sectionSpacing) {
                 versusHeader
                 comparison
-                VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: 4) {
                     SectionHeader(title: "Matches")
-                    ForEach(record.matches) { match in
+                    DividedList(record.matches, inset: 32) { match in
                         HStack(spacing: 12) {
-                            Image(systemName: match.outcome == .win ? "checkmark.circle.fill" : (match.outcome == .loss ? "xmark.circle.fill" : "equal.circle.fill"))
-                                .font(.title3)
-                                .foregroundStyle(match.outcome == .win ? Theme.fairway : (match.outcome == .loss ? Theme.flag : .secondary))
+                            Text(outcomeLetter(match.outcome))
+                                .font(.figure(15, weight: .bold))
+                                .foregroundStyle(outcomeColor(match.outcome))
+                                .frame(width: 20, alignment: .leading)
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(match.courseName).font(.subheadline.weight(.semibold))
+                                Text(match.courseName).font(.body.weight(.medium))
                                 Text("\(match.date.formatted(date: .abbreviated, time: .omitted)) · \(match.holesCompared) holes")
-                                    .font(.caption).foregroundStyle(.secondary)
+                                    .font(.footnote).foregroundStyle(.secondary)
                             }
                             Spacer()
-                            Text("\(match.myStrokes) – \(match.theirStrokes)").font(.headline.monospacedDigit())
+                            Text("\(match.myStrokes) – \(match.theirStrokes)").font(.figure(16, weight: .semibold))
                         }
-                        .cardStyle(padding: 12)
+                        .padding(.vertical, 11)
                     }
                 }
             }
-            .padding()
+            .padding(.horizontal, Theme.gutter)
+            .padding(.bottom, 32)
         }
         .background(Theme.background)
         .navigationTitle("Head to head")
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear { withAnimation(.playful.delay(0.1)) { appeared = true } }
+        .onAppear { withAnimation(.snappySpring.delay(0.1)) { appeared = true } }
     }
 
     private var versusHeader: some View {
-        VStack(spacing: 14) {
-            HStack {
-                VStack(spacing: 6) {
-                    AvatarView(avatar: app.profile.avatar, size: 64, showsRing: true)
-                    Text("You").font(.headline)
+        VStack(spacing: 20) {
+            HStack(alignment: .center) {
+                VStack(spacing: 8) {
+                    AvatarView(avatar: app.profile.avatar, size: 60, showsRing: true)
+                    Text("You").font(.subheadline.weight(.medium))
                 }
-                .offset(x: appeared ? 0 : -60)
+                .frame(width: 90)
+                .offset(x: appeared ? 0 : -24)
+                .opacity(appeared ? 1 : 0)
                 Spacer()
-                VStack(spacing: 2) {
-                    Text(record.recordText).font(.rounded(36, weight: .heavy))
-                    Text("W – L – T").font(.caption2.weight(.bold)).opacity(0.8)
+                VStack(spacing: 4) {
+                    Text(record.recordText)
+                        .font(.display(40, weight: .regular))
+                        .monospacedDigit()
+                    Eyebrow("Won – lost – halved")
                 }
-                .scaleEffect(appeared ? 1 : 0.5)
+                .opacity(appeared ? 1 : 0)
+                .scaleEffect(appeared ? 1 : 0.92)
                 Spacer()
-                VStack(spacing: 6) {
-                    AvatarView(avatar: record.opponentAvatar, size: 64, showsRing: true)
-                    Text(record.opponentName).font(.headline)
+                VStack(spacing: 8) {
+                    AvatarView(avatar: record.opponentAvatar, size: 60)
+                    Text(record.opponentName).font(.subheadline.weight(.medium)).lineLimit(1)
                 }
-                .offset(x: appeared ? 0 : 60)
+                .frame(width: 90)
+                .offset(x: appeared ? 0 : 24)
+                .opacity(appeared ? 1 : 0)
             }
-            HStack(spacing: 8) {
-                InfoPill(text: "Holes won \(record.holesWon)", tint: .white)
-                InfoPill(text: "Lost \(record.holesLost)", tint: .white)
-                InfoPill(text: "Halved \(record.holesHalved)", tint: .white)
-            }
+            MetricGrid(items: [
+                MetricItem(label: "Holes won", value: "\(record.holesWon)", tint: Theme.fairway),
+                MetricItem(label: "Lost", value: "\(record.holesLost)"),
+                MetricItem(label: "Halved", value: "\(record.holesHalved)"),
+            ], columns: 3, compact: true)
+            .overlay(alignment: .top) { Hairline() }
+            .overlay(alignment: .bottom) { Hairline() }
             if let margin = record.averageMarginPer18 {
-                Text(margin >= 0 ? String(format: "You average %.1f shots better per 18", margin) : String(format: "%@ averages %.1f shots better per 18", record.opponentName, -margin))
-                    .font(.subheadline.weight(.semibold))
-                    .opacity(0.9)
+                Text(margin >= 0 ? String(format: "You average %.1f shots better per 18 holes.", margin) : String(format: "%@ averages %.1f shots better per 18 holes.", record.opponentName, -margin))
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
-        .foregroundStyle(.white)
-        .padding(18)
-        .background(Theme.heroGradient, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .padding(.top, 8)
     }
 
     private var comparison: some View {
         let me = record.myStats, them = record.theirStats
-        return VStack(spacing: 16) {
-            HStack {
-                Text("You").font(.caption.weight(.heavy)).foregroundStyle(Theme.fairway)
-                Spacer()
-                Text(record.opponentName).font(.caption.weight(.heavy)).foregroundStyle(Theme.water)
+        return VStack(alignment: .leading, spacing: 18) {
+            SectionHeader(title: "Stat by stat") {
+                HStack(spacing: 12) {
+                    legend("You", Theme.fairway)
+                    legend(record.opponentName, Theme.water)
+                }
             }
             ComparisonBar(label: "Avg over par / 18", mine: me.averageToParPerHole.map { $0 * 18 }, theirs: them.averageToParPerHole.map { $0 * 18 }, format: { String(format: "%+.1f", $0) }, lowerIsBetter: true)
-            ComparisonBar(label: "Greens in reg", mine: me.greensInRegulation.fraction.map { $0 * 100 }, theirs: them.greensInRegulation.fraction.map { $0 * 100 }, format: { "\(Int($0.rounded()))%" })
+            ComparisonBar(label: "Greens in regulation", mine: me.greensInRegulation.fraction.map { $0 * 100 }, theirs: them.greensInRegulation.fraction.map { $0 * 100 }, format: { "\(Int($0.rounded()))%" })
             ComparisonBar(label: "Fairways", mine: me.fairways.fraction.map { $0 * 100 }, theirs: them.fairways.fraction.map { $0 * 100 }, format: { "\(Int($0.rounded()))%" })
-            ComparisonBar(label: "Putts / hole", mine: me.puttsPerHole, theirs: them.puttsPerHole, format: { String(format: "%.2f", $0) }, lowerIsBetter: true)
+            ComparisonBar(label: "Putts per hole", mine: me.puttsPerHole, theirs: them.puttsPerHole, format: { String(format: "%.2f", $0) }, lowerIsBetter: true)
             ComparisonBar(label: "Birdies or better", mine: Double(me.birdiesOrBetter), theirs: Double(them.birdiesOrBetter), format: { "\(Int($0))" })
             ComparisonBar(label: "Scrambling", mine: me.scrambling.fraction.map { $0 * 100 }, theirs: them.scrambling.fraction.map { $0 * 100 }, format: { "\(Int($0.rounded()))%" })
         }
-        .cardStyle()
+    }
+
+    private func legend(_ name: String, _ color: Color) -> some View {
+        HStack(spacing: 5) {
+            Rectangle().fill(color).frame(width: 8, height: 8)
+            Text(name).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+        }
+    }
+
+    private func outcomeLetter(_ outcome: HeadToHeadOutcome) -> String {
+        switch outcome {
+        case .win: return "W"
+        case .loss: return "L"
+        default: return "H"
+        }
+    }
+
+    private func outcomeColor(_ outcome: HeadToHeadOutcome) -> Color {
+        switch outcome {
+        case .win: return Theme.fairway
+        case .loss: return Theme.flag
+        default: return .secondary
+        }
     }
 }

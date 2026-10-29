@@ -24,7 +24,7 @@ struct ScorecardGrid: View {
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 18) {
                 ForEach(Array(segments.enumerated()), id: \.offset) { index, segment in
                     segmentGrid(segment, totalLabel: segments.count == 1 ? "Tot" : (index == 0 ? "Out" : "In"), isLast: index == segments.count - 1)
                 }
@@ -43,27 +43,28 @@ struct ScorecardGrid: View {
             GridRow {
                 label("Hole", bold: true)
                 ForEach(segment, id: \.self) { n in
-                    cell(Text("\(n)").font(.caption.weight(.heavy)), highlighted: n == highlightedHole)
+                    cell(Text("\(n)").font(.caption.weight(.semibold)), highlighted: n == highlightedHole)
                 }
-                cell(Text(totalLabel).font(.caption2.weight(.heavy)))
-                if showGrandTotal { cell(Text("Tot").font(.caption2.weight(.heavy))) }
+                cell(Text(totalLabel.uppercased()).font(.eyebrow).foregroundStyle(.secondary))
+                if showGrandTotal { cell(Text("TOT").font(.eyebrow).foregroundStyle(.secondary)) }
             }
-            .background(Theme.fairway.opacity(0.14))
+            .background(Color.primary.opacity(0.035))
+            .overlay(alignment: .bottom) { Hairline() }
 
             GridRow {
                 label("Par")
                 ForEach(segment, id: \.self) { n in
-                    cell(Text("\(course.hole(n)?.par ?? 0)").font(.caption.weight(.semibold)), highlighted: n == highlightedHole)
+                    cell(Text("\(course.hole(n)?.par ?? 0)").font(.figure(12)), highlighted: n == highlightedHole)
                 }
-                cell(Text("\(course.par(for: segment))").font(.caption.weight(.bold)))
-                if showGrandTotal { cell(Text("\(course.par(for: holes))").font(.caption.weight(.bold))) }
+                cell(Text("\(course.par(for: segment))").font(.figure(12, weight: .semibold)))
+                if showGrandTotal { cell(Text("\(course.par(for: holes))").font(.figure(12, weight: .semibold))) }
             }
 
             if showsStrokeIndex && segment.contains(where: { course.hole($0)?.strokeIndex != nil }) {
                 GridRow {
                     label("S.I.")
                     ForEach(segment, id: \.self) { n in
-                        cell(Text(course.hole(n)?.strokeIndex.map { "\($0)" } ?? "–").font(.caption2).foregroundStyle(.secondary), highlighted: n == highlightedHole)
+                        cell(Text(course.hole(n)?.strokeIndex.map { "\($0)" } ?? "–").font(.figure(11)).foregroundStyle(.secondary), highlighted: n == highlightedHole)
                     }
                     cell(Text(""))
                     if showGrandTotal { cell(Text("")) }
@@ -74,10 +75,10 @@ struct ScorecardGrid: View {
                 GridRow {
                     label(units.system.distanceUnit == "m" ? "Metres" : "Yards")
                     ForEach(segment, id: \.self) { n in
-                        cell(Text(course.hole(n)?.length(for: tee).map { units.distanceNumber($0) } ?? "–").font(.caption2).foregroundStyle(.secondary), highlighted: n == highlightedHole)
+                        cell(Text(course.hole(n)?.length(for: tee).map { units.distanceNumber($0) } ?? "–").font(.figure(11)).foregroundStyle(.secondary), highlighted: n == highlightedHole)
                     }
-                    cell(Text(lengthTotal(segment)).font(.caption2.weight(.semibold)))
-                    if showGrandTotal { cell(Text(lengthTotal(holes)).font(.caption2.weight(.semibold))) }
+                    cell(Text(lengthTotal(segment)).font(.figure(11, weight: .semibold)))
+                    if showGrandTotal { cell(Text(lengthTotal(holes)).font(.figure(11, weight: .semibold))) }
                 }
             }
 
@@ -85,36 +86,36 @@ struct ScorecardGrid: View {
                 GridRow {
                     HStack(spacing: 6) {
                         if let avatar = player.avatar { AvatarView(avatar: avatar, size: 20) }
-                        Text(player.name).font(.caption.weight(.semibold)).lineLimit(1)
+                        Text(player.name).font(.caption.weight(.medium)).lineLimit(1)
                     }
                     .frame(width: labelWidth, height: 38, alignment: .leading)
                     ForEach(segment, id: \.self) { n in
                         ScoreBadge(strokes: player.scores[n], par: course.hole(n)?.par ?? 0, size: 26)
                             .frame(width: cellWidth, height: 38)
-                            .background(n == highlightedHole ? Theme.fairway.opacity(0.1) : .clear)
+                            .background(n == highlightedHole ? Theme.fairway.opacity(0.08) : .clear)
                     }
-                    cell(Text(total(player, segment)).font(.caption.weight(.heavy)))
-                    if showGrandTotal { cell(Text(total(player, holes)).font(.caption.weight(.heavy))) }
+                    cell(Text(total(player, segment)).font(.figure(13, weight: .semibold)))
+                    if showGrandTotal { cell(Text(total(player, holes)).font(.figure(13, weight: .semibold))) }
                 }
-                .overlay(alignment: .top) { Divider() }
+                .overlay(alignment: .top) { Hairline() }
             }
         }
-        .background(Theme.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(alignment: .top) { Hairline() }
+        .overlay(alignment: .bottom) { Hairline() }
     }
 
     private func label(_ text: String, bold: Bool = false) -> some View {
-        Text(text)
-            .font(bold ? .caption.weight(.heavy) : .caption.weight(.semibold))
+        Text(text.uppercased())
+            .font(.eyebrow)
+            .tracking(0.8)
             .foregroundStyle(bold ? .primary : .secondary)
             .frame(width: labelWidth, height: 30, alignment: .leading)
-            .padding(.leading, 10)
     }
 
     private func cell(_ content: some View, highlighted: Bool = false) -> some View {
         content
             .frame(width: cellWidth, height: 30)
-            .background(highlighted ? Theme.fairway.opacity(0.1) : .clear)
+            .background(highlighted ? Theme.fairway.opacity(0.08) : .clear)
     }
 
     private func total(_ player: ScorecardPlayerRow, _ holes: [Int]) -> String {

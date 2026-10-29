@@ -15,7 +15,7 @@ struct CreateTournamentView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            List {
                 Section {
                     TextField("Tournament name", text: $name)
                         .font(.headline)
@@ -66,6 +66,7 @@ struct CreateTournamentView: View {
                         .foregroundStyle(.secondary)
                 }
             }
+            .flatList()
             .navigationTitle("New tournament")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

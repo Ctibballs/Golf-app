@@ -18,19 +18,32 @@ struct PlayView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    filterChips
+                VStack(alignment: .leading, spacing: Theme.sectionSpacing) {
+                    VStack(alignment: .leading, spacing: 16) {
+                        filterChips
+                        if query.isEmpty {
+                            Button { showQuickStart = true } label: {
+                                HStack {
+                                    Image(systemName: "bolt.fill")
+                                    Text("Quick start")
+                                    Spacer()
+                                    Text("Pick a course and tee off").font(.subheadline).opacity(0.8)
+                                }
+                                .padding(.horizontal, 18)
+                            }
+                            .buttonStyle(PrimaryButtonStyle())
+                        }
+                    }
                     if !query.isEmpty {
                         searchResults
                     } else {
-                        quickStartCard
                         nearbySection
                         savedSection
                         demoSection
                     }
                 }
-                .padding(.horizontal)
-                .padding(.bottom, 24)
+                .padding(.horizontal, Theme.gutter)
+                .padding(.bottom, 32)
                 .animation(.snappySpring, value: query.isEmpty)
             }
             .background(Theme.background)
@@ -42,7 +55,7 @@ struct PlayView: View {
                     Button {
                         showCustomEditor = true
                     } label: {
-                        Label("New course", systemImage: "plus.circle.fill")
+                        Label("New course", systemImage: "plus")
                     }
                 }
             }
@@ -60,7 +73,7 @@ struct PlayView: View {
             HStack(spacing: 8) {
                 Chip(title: "All", isSelected: gameFilter == nil) { gameFilter = nil }
                 ForEach(GameType.allCases) { type in
-                    Chip(title: type.displayName, systemImage: type.symbolName, isSelected: gameFilter == type, tint: Theme.tint(for: type)) {
+                    Chip(title: type.displayName, systemImage: type.symbolName, isSelected: gameFilter == type) {
                         gameFilter = type
                     }
                 }
@@ -69,76 +82,56 @@ struct PlayView: View {
         }
     }
 
-    private var quickStartCard: some View {
-        Button { showQuickStart = true } label: {
-            HStack(spacing: 14) {
-                Image(systemName: "bolt.fill")
-                    .font(.title2)
-                    .frame(width: 50, height: 50)
-                    .background(.white.opacity(0.2), in: Circle())
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Quick start").font(.headline)
-                    Text("Pick a course and tee off in seconds").font(.subheadline).opacity(0.85)
-                }
-                Spacer()
-                Image(systemName: "arrow.right.circle.fill").font(.title)
-            }
-            .foregroundStyle(.white)
-            .padding(16)
-            .background(Theme.heroGradient, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-        }
-        .buttonStyle(PressableStyle())
-    }
-
     @ViewBuilder
     private var searchResults: some View {
         let filtered = filter(results)
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 4) {
             SectionHeader(title: "Results", subtitle: isSearching ? "Searching…" : "\(filtered.count) courses")
             if let searchError {
                 Label(searchError, systemImage: "exclamationmark.triangle")
                     .font(.subheadline)
                     .foregroundStyle(Theme.flag)
-                    .cardStyle()
+                    .padding(.vertical, 12)
             }
             if isSearching && results.isEmpty {
-                ForEach(0..<3, id: \.self) { _ in LoadingCard(height: 72) }
+                SkeletonRows(count: 4)
             }
-            ForEach(filtered) { summary in
+            DividedList(filtered, inset: 40) { summary in
                 NavigationLink(value: summary) { CourseRow(summary: summary) }
                     .buttonStyle(PressableStyle())
-                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+                    .transition(.opacity)
             }
             Text(OpenGolfAPIClient.attribution)
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
-                .padding(.top, 4)
+                .padding(.top, 8)
         }
-        .animation(.snappySpring, value: results)
+        .animation(.gentle, value: results)
     }
 
     @ViewBuilder
     private var nearbySection: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 4) {
             SectionHeader(title: "Nearby", subtitle: "Golf, pitch & putt and mini golf around you")
             if app.location.isDenied {
                 Label("Location is off. Enable it in Settings to find courses near you.", systemImage: "location.slash")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-                    .cardStyle()
+                    .padding(.vertical, 12)
             } else if nearby.isEmpty {
                 Button {
                     Task { await loadNearby() }
                 } label: {
-                    HStack {
-                        if isLoadingNearby { ProgressView().padding(.trailing, 4) }
-                        Label(isLoadingNearby ? "Looking around…" : "Find courses near me", systemImage: "location.fill")
+                    HStack(spacing: 8) {
+                        if isLoadingNearby { ProgressView() }
+                        Label(isLoadingNearby ? "Looking around…" : "Find courses near me", systemImage: "location")
                     }
                 }
-                .buttonStyle(SecondaryButtonStyle())
+                .buttonStyle(SecondaryButtonStyle(tint: Theme.fairway))
                 .disabled(isLoadingNearby)
+                .padding(.top, 10)
             } else {
-                ForEach(filter(nearby).prefix(12)) { summary in
+                DividedList(Array(filter(nearby).prefix(12)), inset: 40) { summary in
                     NavigationLink(value: summary) { CourseRow(summary: summary) }
                         .buttonStyle(PressableStyle())
                 }
@@ -152,9 +145,9 @@ struct PlayView: View {
         let others = app.library.knownCourses.filter { !app.isFavorite($0.id) }
         let courses = filter((favorites + others).map(\.summary))
         if !courses.isEmpty {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 4) {
                 SectionHeader(title: "Your courses")
-                ForEach(courses) { summary in
+                DividedList(courses, inset: 40) { summary in
                     NavigationLink(value: summary) { CourseRow(summary: summary, isFavorite: app.isFavorite(summary.id)) }
                         .buttonStyle(PressableStyle())
                 }
@@ -163,9 +156,9 @@ struct PlayView: View {
     }
 
     private var demoSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            SectionHeader(title: "Demo courses", subtitle: "Fully mapped, great for trying replays and matches")
-            ForEach(filter(DemoData.courses.map(\.summary))) { summary in
+        VStack(alignment: .leading, spacing: 4) {
+            SectionHeader(title: "Demo courses", subtitle: "Fully mapped, good for trying replays and matches")
+            DividedList(filter(DemoData.courses.map(\.summary)), inset: 40) { summary in
                 NavigationLink(value: summary) { CourseRow(summary: summary) }
                     .buttonStyle(PressableStyle())
             }
@@ -238,27 +231,28 @@ struct CourseRow: View {
     var body: some View {
         HStack(spacing: 14) {
             Image(systemName: type.symbolName)
-                .font(.headline)
-                .foregroundStyle(.white)
-                .frame(width: 44, height: 44)
-                .background(Theme.gradient(for: type), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+                .font(.body)
+                .foregroundStyle(Theme.tint(for: type))
+                .frame(width: 26)
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
-                    Text(summary.name).font(.headline).lineLimit(1)
-                    if isFavorite { Image(systemName: "star.fill").font(.caption).foregroundStyle(Theme.gold) }
+                    Text(summary.name).font(.body.weight(.medium)).lineLimit(1)
+                    if isFavorite { Image(systemName: "star.fill").font(.caption2).foregroundStyle(Theme.gold) }
                 }
-                Text(details).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                Text(details).font(.footnote).foregroundStyle(.secondary).lineLimit(1)
             }
-            Spacer()
+            Spacer(minLength: 8)
             if let distanceText {
                 Text(distanceText)
-                    .font(.caption.weight(.semibold))
+                    .font(.footnote)
+                    .monospacedDigit()
                     .foregroundStyle(.secondary)
             }
-            Image(systemName: "chevron.right").font(.caption.weight(.bold)).foregroundStyle(.tertiary)
+            Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
         }
         .foregroundStyle(.primary)
-        .cardStyle(padding: 12)
+        .padding(.vertical, 12)
+        .contentShape(Rectangle())
     }
 
     private var type: GameType {

@@ -9,35 +9,37 @@ struct RoundSummaryView: View {
     var session: MatchSession?
     let onDone: () -> Void
 
-    @State private var confetti = 0
-    @State private var revealed = false
+    @State private var shownStrokes = 0
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 if let round = app.round(roundID) {
-                    VStack(spacing: 18) {
+                    VStack(alignment: .leading, spacing: Theme.sectionSpacing) {
                         hero(round)
                         if let session {
-                            MatchResultsCard(session: session)
+                            MatchResultsSection(session: session)
                         }
                         RoundReport(round: round)
                     }
-                    .padding()
+                    .padding(.horizontal, Theme.gutter)
+                    .padding(.bottom, 32)
                 }
             }
             .background(Theme.background)
-            .overlay { ConfettiView(trigger: confetti).ignoresSafeArea() }
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Done", action: onDone).fontWeight(.bold)
+                    Button("Done", action: onDone).fontWeight(.semibold)
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
             .onAppear {
-                withAnimation(.playful.delay(0.2)) { revealed = true }
-                if isPersonalBest { confetti += 1 }
+                guard let round = app.round(roundID) else { return }
+                // Count the score up from par so the digits roll into place.
+                shownStrokes = round.course.par(for: round.holeNumbers)
+                withAnimation(.easeOut(duration: 0.9).delay(0.25)) { shownStrokes = round.totalStrokes }
             }
+            .sensoryFeedback(.success, trigger: shownStrokes == app.round(roundID)?.totalStrokes) { _, done in done && isPersonalBest }
         }
     }
 
@@ -50,25 +52,31 @@ struct RoundSummaryView: View {
     }
 
     private func hero(_ round: Round) -> some View {
-        VStack(spacing: 10) {
-            if isPersonalBest {
-                InfoPill(text: "Personal best", systemImage: "crown.fill", tint: .white)
+        VStack(alignment: .leading, spacing: 10) {
+            Eyebrow("Round complete · \(round.date.formatted(date: .abbreviated, time: .omitted))")
+            Text(round.course.name)
+                .font(.display(28))
+                .lineLimit(2)
+            HStack(alignment: .lastTextBaseline, spacing: 14) {
+                Text("\(shownStrokes)")
+                    .font(.display(96, weight: .regular))
+                    .contentTransition(.numericText(value: Double(shownStrokes)))
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(toParText(round.toPar))
+                        .font(.title3.weight(.medium))
+                        .foregroundStyle(round.toPar < 0 ? Theme.flag : .primary)
+                    if isPersonalBest {
+                        Label("Personal best", systemImage: "crown.fill")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(Theme.gold)
+                            .symbolEffect(.bounce, value: shownStrokes == round.totalStrokes)
+                    }
+                }
+                .padding(.bottom, 14)
             }
-            Text("\(round.totalStrokes)")
-                .font(.rounded(84, weight: .heavy))
-                .contentTransition(.numericText(value: Double(revealed ? round.totalStrokes : 0)))
-                .scaleEffect(revealed ? 1 : 0.6)
-            Text(toParText(round.toPar))
-                .font(.title3.weight(.bold))
-                .opacity(0.9)
-            Text("\(round.course.name) · \(round.date.formatted(date: .abbreviated, time: .omitted))")
-                .font(.subheadline)
-                .opacity(0.8)
         }
-        .foregroundStyle(.white)
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 28)
-        .background(Theme.gradient(for: round.gameType), in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .padding(.top, 8)
+        .reveal(0)
     }
 
     private func toParText(_ toPar: Int) -> String {
@@ -81,29 +89,29 @@ struct RoundSummaryView: View {
 }
 
 /// Final standings of a match.
-struct MatchResultsCard: View {
+struct MatchResultsSection: View {
     let session: MatchSession
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 4) {
             SectionHeader(title: "Results", subtitle: session.match.format.displayName)
-            ForEach(session.leaderboard) { entry in
+            DividedList(session.leaderboard, inset: 44) { entry in
                 HStack(spacing: 12) {
                     Text(entry.positionLabel)
-                        .font(.headline.monospacedDigit())
-                        .frame(width: 34)
-                        .foregroundStyle(entry.position == 1 ? Theme.gold : .secondary)
-                    AvatarView(avatar: entry.participant.avatar, size: 34)
-                    Text(entry.participant.name).font(.subheadline.weight(.semibold))
+                        .font(.figure(15, weight: .semibold))
+                        .frame(width: 32, alignment: .leading)
+                        .foregroundStyle(entry.position == 1 && entry.thru > 0 ? Theme.gold : .secondary)
+                    AvatarView(avatar: entry.participant.avatar, size: 32)
+                    Text(entry.participant.name).font(.body.weight(.medium))
                     if entry.position == 1 && entry.thru > 0 {
-                        Image(systemName: "crown.fill").foregroundStyle(Theme.gold)
+                        Image(systemName: "crown.fill").font(.footnote).foregroundStyle(Theme.gold)
                     }
                     Spacer()
-                    Text(entry.statusText).font(.headline)
+                    Text(entry.statusText).font(.figure(17, weight: .semibold))
                 }
+                .padding(.vertical, 10)
             }
         }
-        .cardStyle()
     }
 }
 
@@ -115,35 +123,29 @@ struct RoundReport: View {
 
     var body: some View {
         let stats = StatsEngine.scoring(for: round)
-        VStack(alignment: .leading, spacing: 18) {
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10), GridItem(.flexible())], spacing: 10) {
-                StatTile(title: "Putts", value: round.totalPutts.map { "\($0)" } ?? "—", subtitle: stats.puttsPerHole.map { String(format: "%.1f / hole", $0) }, systemImage: "circle.dotted", tint: Theme.water)
-                if round.gameType.tracksGreens {
-                    StatTile(title: "Greens", value: stats.greensInRegulation.percentText, subtitle: "\(stats.greensInRegulation.made)/\(stats.greensInRegulation.attempts) in reg", systemImage: "scope")
-                }
-                if round.gameType.tracksFairways {
-                    StatTile(title: "Fairways", value: stats.fairways.percentText, subtitle: "\(stats.fairways.made)/\(stats.fairways.attempts) hit", systemImage: "arrow.up.forward", tint: Theme.lime)
-                }
-                StatTile(title: "Birdies+", value: "\(stats.birdiesOrBetter)", systemImage: "bird.fill", tint: Theme.flag)
-                StatTile(title: "Pars", value: "\(stats.count(.par))", systemImage: "equal.circle.fill")
-                if round.gameType.tracksGreens {
-                    StatTile(title: "Scrambling", value: stats.scrambling.percentText, systemImage: "figure.run", tint: Theme.gold)
-                }
+        VStack(alignment: .leading, spacing: Theme.sectionSpacing) {
+            VStack(alignment: .leading, spacing: 14) {
+                SectionHeader(title: "Round stats")
+                MetricGrid(items: metrics(stats), columns: 3)
+                ScoreDistributionBar(stats: stats)
+                    .padding(.top, 4)
             }
-
-            ScoreDistributionBar(stats: stats)
+            .reveal(1)
 
             if round.hasShotData {
-                NavigationLink {
-                    ReplayView(rounds: [round], course: round.course)
-                } label: {
-                    Label("Watch shot replay", systemImage: "play.rectangle.fill")
+                VStack(alignment: .leading, spacing: 14) {
+                    SectionHeader(title: "Shots to the green, then to the hole")
+                    ShotsToGreenChart(round: round)
+                    NavigationLink {
+                        ReplayView(rounds: [round], course: round.course)
+                    } label: {
+                        Label("Watch shot replay", systemImage: "play.fill")
+                    }
+                    .buttonStyle(SecondaryButtonStyle(tint: Theme.fairway))
                 }
-                .buttonStyle(PrimaryButtonStyle(gradient: Theme.skyGradient))
-                ShotsToGreenChart(round: round)
             }
 
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 12) {
                 SectionHeader(title: "Scorecard")
                 ScorecardGrid(
                     course: round.course, holes: round.holeNumbers, tee: round.tee,
@@ -152,55 +154,76 @@ struct RoundReport: View {
                 )
             }
 
-            HandicapImpactCard(round: round)
+            HandicapImpactSection(round: round)
 
             if let weather = round.weatherSummary {
-                Label(weather, systemImage: "cloud.sun.fill")
-                    .font(.subheadline)
+                Label(weather, systemImage: "cloud.sun")
+                    .font(.footnote)
                     .foregroundStyle(.secondary)
             }
         }
     }
+
+    private func metrics(_ stats: ScoringStats) -> [MetricItem] {
+        var items = [
+            MetricItem(label: "Putts", value: round.totalPutts.map { "\($0)" } ?? "—", detail: stats.puttsPerHole.map { String(format: "%.1f per hole", $0) }),
+        ]
+        if round.gameType.tracksGreens {
+            items.append(MetricItem(label: "Greens", value: stats.greensInRegulation.percentText, detail: "\(stats.greensInRegulation.made) of \(stats.greensInRegulation.attempts)"))
+        }
+        if round.gameType.tracksFairways {
+            items.append(MetricItem(label: "Fairways", value: stats.fairways.percentText, detail: "\(stats.fairways.made) of \(stats.fairways.attempts)"))
+        }
+        items.append(MetricItem(label: "Birdies+", value: "\(stats.birdiesOrBetter)", tint: stats.birdiesOrBetter > 0 ? Theme.flag : nil))
+        items.append(MetricItem(label: "Pars", value: "\(stats.count(.par))"))
+        if round.gameType.tracksGreens {
+            items.append(MetricItem(label: "Scrambling", value: stats.scrambling.percentText))
+        }
+        return items
+    }
 }
 
-/// Eagles to doubles as a single stacked bar.
+/// Eagles to doubles as a single stacked bar with a legend.
 struct ScoreDistributionBar: View {
     let stats: ScoringStats
+    @State private var shown = false
 
     var body: some View {
         let types = ScoreType.allCases.filter { stats.count($0) > 0 }
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             GeometryReader { geo in
                 HStack(spacing: 2) {
                     ForEach(types, id: \.self) { type in
                         Rectangle()
-                            .fill(color(type))
-                            .frame(width: max(4, geo.size.width * CGFloat(stats.count(type)) / CGFloat(max(1, stats.holesPlayed)) - 2))
+                            .fill(Self.color(type))
+                            .frame(width: max(3, geo.size.width * CGFloat(stats.count(type)) / CGFloat(max(1, stats.holesPlayed)) - 2))
                     }
                 }
-                .clipShape(Capsule())
+                .frame(width: geo.size.width, alignment: .leading)
+                .scaleEffect(x: shown ? 1 : 0, anchor: .leading)
             }
-            .frame(height: 14)
-            HStack(spacing: 12) {
+            .frame(height: 6)
+            HStack(spacing: 14) {
                 ForEach(types, id: \.self) { type in
-                    HStack(spacing: 4) {
-                        Circle().fill(color(type)).frame(width: 8, height: 8)
-                        Text("\(stats.count(type)) \(type.displayName)").font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
+                    HStack(spacing: 5) {
+                        Rectangle().fill(Self.color(type)).frame(width: 8, height: 8)
+                        Text("\(stats.count(type))").font(.caption.weight(.semibold)).monospacedDigit()
+                        Text(type.displayName).font(.caption).foregroundStyle(.secondary)
                     }
                 }
             }
         }
-        .cardStyle()
+        .onAppear { withAnimation(.easeOut(duration: 0.8).delay(0.2)) { shown = true } }
     }
 
-    func color(_ type: ScoreType) -> Color {
+    static func color(_ type: ScoreType) -> Color {
         switch type {
         case .albatrossOrBetter, .eagle: return Theme.gold
         case .birdie: return Theme.flag
-        case .par: return Theme.fairway
+        case .par: return Color.primary.opacity(0.75)
         case .bogey: return Theme.water
-        case .doubleBogey: return Color(hex: 0x5E5CE6)
-        case .tripleOrWorse: return Color(hex: 0x3A3A8C)
+        case .doubleBogey: return Theme.double
+        case .tripleOrWorse: return Theme.double.opacity(0.6)
         }
     }
 }
@@ -221,22 +244,18 @@ struct ShotsToGreenChart: View {
             guard let putts = score.putts else { return [] }
             return [Bar(hole: score.holeNumber, kind: "To green", count: score.strokes - putts), Bar(hole: score.holeNumber, kind: "Putts", count: putts)]
         }
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Shots to the green, then to the hole").font(.headline)
-            Chart(bars) { bar in
-                BarMark(x: .value("Hole", "\(bar.hole)"), y: .value("Strokes", bar.count))
-                    .foregroundStyle(by: .value("Kind", bar.kind))
-                    .cornerRadius(3)
-            }
-            .chartForegroundStyleScale(["To green": Theme.fairway, "Putts": Theme.water])
-            .frame(height: 160)
+        Chart(bars) { bar in
+            BarMark(x: .value("Hole", "\(bar.hole)"), y: .value("Strokes", bar.count), width: .ratio(0.55))
+                .foregroundStyle(by: .value("Kind", bar.kind))
         }
-        .cardStyle()
+        .chartForegroundStyleScale(["To green": Theme.fairway, "Putts": Theme.water.opacity(0.55)])
+        .chartLegend(position: .top, alignment: .leading)
+        .frame(height: 170)
     }
 }
 
 /// How this round affects the handicap.
-struct HandicapImpactCard: View {
+struct HandicapImpactSection: View {
     @Environment(AppModel.self) private var app
     let round: Round
 
@@ -244,28 +263,19 @@ struct HandicapImpactCard: View {
         let result = app.handicap(for: round.gameType)
         let differential = result.differentials.first { $0.roundIDs.contains(round.id) }
         if let differential {
-            HStack(spacing: 14) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Score differential").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                    Text(String(format: "%.1f", differential.value)).font(.rounded(30, weight: .heavy))
-                }
-                Spacer()
-                VStack(alignment: .trailing, spacing: 4) {
-                    if differential.usedInIndex {
-                        InfoPill(text: "Counts toward index", systemImage: "checkmark.seal.fill", tint: Theme.fairway)
-                    }
-                    if differential.isEstimatedRating {
-                        Text("Rating estimated from par").font(.caption2).foregroundStyle(.secondary)
-                    }
-                    Text("Index \(result.displayIndex)").font(.subheadline.weight(.bold))
-                }
+            VStack(alignment: .leading, spacing: 4) {
+                SectionHeader(title: "Handicap")
+                MetricGrid(items: [
+                    MetricItem(label: "Differential", value: String(format: "%.1f", differential.value),
+                               detail: differential.isEstimatedRating ? "Rating estimated from par" : (differential.usedInIndex ? "Counts toward index" : "Not in your best scores"),
+                               tint: differential.usedInIndex ? Theme.fairway : nil),
+                    MetricItem(label: "Index now", value: result.displayIndex),
+                ], columns: 2)
             }
-            .cardStyle()
         } else if !round.countsForHandicap {
             Label("This round doesn't count toward your handicap.", systemImage: "info.circle")
-                .font(.subheadline)
+                .font(.footnote)
                 .foregroundStyle(.secondary)
-                .cardStyle()
         }
     }
 }
@@ -280,28 +290,32 @@ struct RoundDetailView: View {
     var body: some View {
         ScrollView {
             if let round = app.round(roundID) {
-                VStack(alignment: .leading, spacing: 18) {
-                    HStack(alignment: .firstTextBaseline) {
-                        Text("\(round.totalStrokes)").font(.rounded(56, weight: .heavy))
-                        ToParText(toPar: round.toPar, font: .title2.weight(.bold))
-                        Spacer()
-                        VStack(alignment: .trailing) {
-                            Text(round.date.formatted(date: .abbreviated, time: .shortened)).font(.subheadline)
-                            if let tee = round.tee { Text("\(tee.name) tees").font(.caption).foregroundStyle(.secondary) }
+                VStack(alignment: .leading, spacing: Theme.sectionSpacing) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Eyebrow(round.date.formatted(date: .long, time: .shortened))
+                        Text(round.course.name).font(.display(28)).lineLimit(2)
+                        HStack(alignment: .lastTextBaseline, spacing: 12) {
+                            Text("\(round.totalStrokes)").font(.display(64, weight: .regular))
+                            ToParText(toPar: round.toPar, font: .title3.weight(.medium))
+                            Spacer()
+                            if let tee = round.tee {
+                                Text("\(tee.name) tees").font(.footnote).foregroundStyle(.secondary)
+                            }
                         }
                     }
+                    .reveal(0)
                     if let record = app.library.matchHistory.first(where: { $0.id == round.matchID }) {
-                        PastMatchCard(record: record)
+                        PastMatchSection(record: record)
                     }
                     RoundReport(round: round)
                 }
-                .padding()
+                .padding(.horizontal, Theme.gutter)
+                .padding(.bottom, 32)
             } else {
                 EmptyStateView(title: "Round not found", message: "It may have been deleted.")
             }
         }
         .background(Theme.background)
-        .navigationTitle(app.round(roundID)?.course.name ?? "Round")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -332,27 +346,27 @@ struct RoundDetailView: View {
 }
 
 /// Everyone's scores from a saved match.
-struct PastMatchCard: View {
+struct PastMatchSection: View {
     @Environment(AppModel.self) private var app
     let record: MatchRecord
 
     var body: some View {
         let entries = Leaderboard.entries(for: record.snapshot)
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text(record.snapshot.match.name).font(.headline)
-                Spacer()
-                InfoPill(text: record.snapshot.match.format.displayName, systemImage: record.snapshot.match.format.symbolName)
-            }
-            ForEach(entries) { entry in
+        VStack(alignment: .leading, spacing: 4) {
+            SectionHeader(title: record.snapshot.match.name, subtitle: record.snapshot.match.format.displayName)
+            DividedList(entries, inset: 40) { entry in
                 HStack(spacing: 10) {
-                    Text(entry.positionLabel).font(.subheadline.monospacedDigit()).frame(width: 28).foregroundStyle(.secondary)
+                    Text(entry.positionLabel)
+                        .font(.figure(15, weight: .semibold))
+                        .frame(width: 28, alignment: .leading)
+                        .foregroundStyle(.secondary)
                     AvatarView(avatar: entry.participant.avatar, size: 28)
-                    Text(entry.participant.id == app.profile.id ? "You" : entry.participant.name).font(.subheadline.weight(.semibold))
+                    Text(entry.participant.id == app.profile.id ? "You" : entry.participant.name).font(.body.weight(.medium))
                     Spacer()
-                    Text("\(entry.gross)").font(.subheadline.monospacedDigit()).foregroundStyle(.secondary)
-                    Text(entry.statusText).font(.subheadline.weight(.bold)).frame(minWidth: 50, alignment: .trailing)
+                    Text("\(entry.gross)").font(.figure(15)).foregroundStyle(.secondary)
+                    Text(entry.statusText).font(.figure(16, weight: .semibold)).frame(minWidth: 50, alignment: .trailing)
                 }
+                .padding(.vertical, 10)
             }
             if record.snapshot.participants.contains(where: { $0.scores.contains { !$0.shots.isEmpty } }) {
                 NavigationLink {
@@ -361,11 +375,11 @@ struct PastMatchCard: View {
                         course: record.snapshot.match.course
                     )
                 } label: {
-                    Label("Replay everyone's shots", systemImage: "play.rectangle.on.rectangle.fill")
+                    Label("Replay everyone's shots", systemImage: "play.fill")
                 }
-                .buttonStyle(SecondaryButtonStyle(tint: Theme.water))
+                .buttonStyle(SecondaryButtonStyle(tint: Theme.fairway))
+                .padding(.top, 10)
             }
         }
-        .cardStyle()
     }
 }

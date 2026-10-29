@@ -11,17 +11,42 @@ struct CompeteView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 22) {
-                    heroButtons
-                    OnlineStatusCard()
+                VStack(alignment: .leading, spacing: Theme.sectionSpacing) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Button { showCreateMatch = true } label: {
+                            HStack {
+                                Image(systemName: "person.2")
+                                Text("Host a match")
+                                Spacer()
+                                Text("Get a four-letter code").font(.subheadline).opacity(0.8)
+                            }
+                            .padding(.horizontal, 18)
+                        }
+                        .buttonStyle(PrimaryButtonStyle(height: 56))
+
+                        Button { showJoin = true } label: {
+                            HStack {
+                                Image(systemName: "number")
+                                Text("Join with a code")
+                                Spacer()
+                                Text("Matches and tournaments").font(.subheadline).foregroundStyle(.secondary)
+                            }
+                            .padding(.horizontal, 18)
+                        }
+                        .buttonStyle(SecondaryButtonStyle(height: 56))
+
+                        OnlineStatusRow()
+                            .padding(.top, 6)
+                    }
+                    .reveal(0)
                     if !app.library.activeGames.isEmpty {
                         ActiveGamesSection()
                     }
-                    tournamentsSection
+                    tournamentsSection.reveal(1)
                     pastMatchesSection
                 }
-                .padding(.horizontal)
-                .padding(.bottom, 24)
+                .padding(.horizontal, Theme.gutter)
+                .padding(.bottom, 32)
             }
             .background(Theme.background)
             .navigationTitle("Compete")
@@ -31,57 +56,20 @@ struct CompeteView: View {
         }
     }
 
-    private var heroButtons: some View {
-        HStack(spacing: 12) {
-            Button { showCreateMatch = true } label: {
-                VStack(alignment: .leading, spacing: 10) {
-                    Image(systemName: "person.3.sequence.fill").font(.title)
-                    Text("Host a match").font(.headline)
-                    Text("Get a four-letter code").font(.caption).opacity(0.85)
-                }
-                .frame(maxWidth: .infinity, minHeight: 130, alignment: .leading)
-                .padding(16)
-                .foregroundStyle(.white)
-                .background(Theme.skyGradient, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-            }
-            .buttonStyle(PressableStyle())
-
-            Button { showJoin = true } label: {
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack(spacing: 3) {
-                        ForEach(Array("JOIN"), id: \.self) { letter in
-                            Text(String(letter))
-                                .font(.system(size: 15, weight: .heavy, design: .rounded))
-                                .foregroundStyle(Theme.flag)
-                                .frame(width: 22, height: 26)
-                                .background(.white, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
-                        }
-                    }
-                    Text("Join with code").font(.headline)
-                    Text("Matches & tournaments").font(.caption).opacity(0.85)
-                }
-                .frame(maxWidth: .infinity, minHeight: 130, alignment: .leading)
-                .padding(16)
-                .foregroundStyle(.white)
-                .background(Theme.sunsetGradient, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-            }
-            .buttonStyle(PressableStyle())
-        }
-    }
-
+    @ViewBuilder
     private var tournamentsSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        let tournaments = app.library.tournaments.sorted { $0.tournament.createdAt > $1.tournament.createdAt }
+        VStack(alignment: .leading, spacing: 4) {
             SectionHeader(title: "Tournaments", actionTitle: "New") { showCreateTournament = true }
-            if app.library.tournaments.isEmpty {
+            if tournaments.isEmpty {
                 EmptyStateView(
                     title: "Run your own major",
                     message: "Multi-round events with a live leaderboard, every player's current hole and detailed stats.",
                     systemImage: "trophy",
                     actionTitle: "Create tournament"
                 ) { showCreateTournament = true }
-                .cardStyle()
             } else {
-                ForEach(app.library.tournaments.sorted { $0.tournament.createdAt > $1.tournament.createdAt }, id: \.tournament.id) { snapshot in
+                DividedList(tournaments, inset: 38) { snapshot in
                     Button { app.present(.tournament(snapshot.tournament.id)) } label: {
                         TournamentRow(snapshot: snapshot)
                     }
@@ -93,16 +81,19 @@ struct CompeteView: View {
 
     @ViewBuilder
     private var pastMatchesSection: some View {
-        let records = app.library.matchHistory.sorted { $0.savedAt > $1.savedAt }
+        let records = Array(app.library.matchHistory.sorted { $0.savedAt > $1.savedAt }.prefix(10))
         if !records.isEmpty {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 4) {
                 SectionHeader(title: "Past matches")
-                ForEach(records.prefix(10)) { record in
+                DividedList(records) { record in
                     NavigationLink {
-                        ScrollView { PastMatchCard(record: record).padding() }
-                            .background(Theme.background)
-                            .navigationTitle(record.snapshot.match.name)
-                            .navigationBarTitleDisplayMode(.inline)
+                        ScrollView {
+                            PastMatchSection(record: record)
+                                .padding(.horizontal, Theme.gutter)
+                        }
+                        .background(Theme.background)
+                        .navigationTitle(record.snapshot.match.name)
+                        .navigationBarTitleDisplayMode(.inline)
                     } label: {
                         PastMatchRow(record: record)
                     }
@@ -119,34 +110,35 @@ struct TournamentRow: View {
     var body: some View {
         let leader = TournamentStandings.compute(snapshot).first
         HStack(spacing: 14) {
-            Image(systemName: "trophy.fill")
-                .font(.title3)
-                .foregroundStyle(.white)
-                .frame(width: 46, height: 46)
-                .background(Theme.goldGradient, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            Image(systemName: "trophy")
+                .font(.body)
+                .foregroundStyle(Theme.gold)
+                .frame(width: 24)
             VStack(alignment: .leading, spacing: 3) {
-                Text(snapshot.tournament.name).font(.headline)
-                Text("\(snapshot.entrants.count) players · \(snapshot.tournament.rounds.count) round\(snapshot.tournament.rounds.count == 1 ? "" : "s")")
-                    .font(.caption).foregroundStyle(.secondary)
+                Text(snapshot.tournament.name).font(.body.weight(.medium)).lineLimit(1)
+                Text(detail(leader)).font(.footnote).foregroundStyle(.secondary).lineLimit(1)
             }
-            Spacer()
-            VStack(alignment: .trailing, spacing: 3) {
-                statusPill
-                if let leader, leader.holesPlayed > 0 {
-                    Text("\(leader.entrant.name) \(leader.statusText)").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                }
-            }
+            Spacer(minLength: 8)
+            status
+            Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
         }
         .foregroundStyle(.primary)
-        .cardStyle(padding: 12)
+        .padding(.vertical, 13)
+        .contentShape(Rectangle())
+    }
+
+    private func detail(_ leader: TournamentStanding?) -> String {
+        var parts = ["\(snapshot.entrants.count) players", "\(snapshot.tournament.rounds.count) round\(snapshot.tournament.rounds.count == 1 ? "" : "s")"]
+        if let leader, leader.holesPlayed > 0 { parts.append("\(leader.entrant.name) leads \(leader.statusText)") }
+        return parts.joined(separator: " · ")
     }
 
     @ViewBuilder
-    private var statusPill: some View {
+    private var status: some View {
         switch snapshot.tournament.status {
-        case .registration: InfoPill(text: "Open", tint: Theme.water)
+        case .registration: Eyebrow("Open", color: Theme.water)
         case .inProgress: LiveBadge()
-        case .finished: InfoPill(text: "Final", tint: .secondary)
+        case .finished: Eyebrow("Final")
         }
     }
 }
@@ -160,51 +152,50 @@ struct PastMatchRow: View {
         let mine = entries.first { $0.id == app.profile.id }
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 3) {
-                Text(record.snapshot.match.name).font(.headline).lineLimit(1)
+                Text(record.snapshot.match.name).font(.body.weight(.medium)).lineLimit(1)
                 Text("\(record.snapshot.match.course.name) · \(record.savedAt.formatted(date: .abbreviated, time: .omitted))")
-                    .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    .font(.footnote).foregroundStyle(.secondary).lineLimit(1)
             }
-            Spacer()
-            HStack(spacing: -10) {
+            Spacer(minLength: 8)
+            HStack(spacing: -8) {
                 ForEach(record.snapshot.participants.prefix(4)) { p in
-                    AvatarView(avatar: p.avatar, size: 28, showsRing: true)
+                    AvatarView(avatar: p.avatar, size: 24)
                 }
             }
             if let mine {
                 Text(mine.positionLabel)
-                    .font(.headline)
+                    .font(.figure(17, weight: .semibold))
                     .foregroundStyle(mine.position == 1 ? Theme.gold : .secondary)
-                    .frame(minWidth: 30)
+                    .frame(minWidth: 30, alignment: .trailing)
             }
         }
         .foregroundStyle(.primary)
-        .cardStyle(padding: 12)
+        .padding(.vertical, 13)
+        .contentShape(Rectangle())
     }
 }
 
-struct OnlineStatusCard: View {
+struct OnlineStatusRow: View {
     @Environment(AppModel.self) private var app
 
     var body: some View {
         NavigationLink {
             SettingsView()
         } label: {
-            HStack(spacing: 12) {
-                Image(systemName: app.isOnline ? "antenna.radiowaves.left.and.right" : "wifi.slash")
-                    .font(.headline)
-                    .foregroundStyle(app.isOnline ? Theme.fairway : .secondary)
-                    .frame(width: 36, height: 36)
-                    .background((app.isOnline ? Theme.fairway : Color.secondary).opacity(0.12), in: Circle())
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(app.isOnline ? "Online play is on" : "Offline demo mode").font(.subheadline.weight(.semibold))
-                    Text(app.isOnline ? "Friends join with your code from their own phones." : "Friends are simulated. Connect a free Supabase project to play for real.")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-                Spacer()
-                Image(systemName: "chevron.right").foregroundStyle(.tertiary)
+            HStack(spacing: 10) {
+                Circle()
+                    .fill(app.isOnline ? Theme.fairway : Color.secondary.opacity(0.5))
+                    .frame(width: 7, height: 7)
+                Text(app.isOnline ? "Online play is on. Friends join from their own phones." : "Offline demo mode: friends are simulated.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.leading)
+                Spacer(minLength: 4)
+                Text(app.isOnline ? "Settings" : "Set up")
+                    .font(.footnote.weight(.medium))
+                    .foregroundStyle(Theme.fairway)
             }
-            .foregroundStyle(.primary)
-            .cardStyle(padding: 12)
+            .contentShape(Rectangle())
         }
         .buttonStyle(PressableStyle())
     }

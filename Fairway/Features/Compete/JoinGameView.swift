@@ -17,12 +17,14 @@ struct JoinGameView: View {
         NavigationStack {
             VStack(spacing: 28) {
                 VStack(spacing: 8) {
-                    Text("Enter room code")
-                        .font(.rounded(28, weight: .heavy))
+                    Eyebrow("Join a game")
+                    Text("Enter the room code")
+                        .font(.display(28))
                     Text("Ask the host for the four letters on their screen.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
+                .multilineTextAlignment(.center)
                 .padding(.top, 12)
 
                 codeBoxes
@@ -64,21 +66,26 @@ struct JoinGameView: View {
         HStack(spacing: 12) {
             ForEach(0..<JoinCode.length, id: \.self) { index in
                 let letter = index < code.count ? String(Array(code)[index]) : ""
+                let isNext = index == code.count
                 ZStack {
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .fill(letter.isEmpty ? Theme.card : Color.white)
-                        .shadow(color: .black.opacity(letter.isEmpty ? 0.04 : 0.15), radius: 8, y: 4)
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .strokeBorder(index == code.count ? Theme.fairway : .clear, lineWidth: 3)
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .strokeBorder(isNext ? Theme.fairway : Theme.outline, lineWidth: isNext ? 1.5 : 1)
                     Text(letter)
-                        .font(.rounded(44, weight: .heavy))
-                        .foregroundStyle(Theme.deepGreen)
-                        .scaleEffect(letter.isEmpty ? 0.3 : 1)
+                        .font(.system(size: 40, weight: .semibold, design: .monospaced))
+                        .scaleEffect(letter.isEmpty ? 0.6 : 1)
                         .opacity(letter.isEmpty ? 0 : 1)
+                    if isNext && !isJoining {
+                        Rectangle()
+                            .fill(Theme.fairway)
+                            .frame(width: 2, height: 30)
+                            .phaseAnimator([1.0, 0.0]) { caret, opacity in
+                                caret.opacity(opacity)
+                            } animation: { _ in .easeInOut(duration: 0.55) }
+                    }
                 }
-                .frame(width: 66, height: 80)
-                .rotationEffect(.degrees(letter.isEmpty ? 0 : (index.isMultiple(of: 2) ? -3 : 3)))
-                .animation(.playful, value: letter)
+                .frame(width: 64, height: 78)
+                .animation(.snappySpring, value: letter)
+                .animation(.easeOut(duration: 0.2), value: isNext)
             }
         }
         .overlay {
@@ -96,30 +103,28 @@ struct JoinGameView: View {
                         enter(String(letter))
                     } label: {
                         Text(String(letter))
-                            .font(.rounded(24, weight: .bold))
+                            .font(.system(size: 22, weight: .medium, design: .monospaced))
                             .frame(maxWidth: .infinity)
                             .frame(height: 50)
-                            .background(Theme.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                            .shadow(color: .black.opacity(0.05), radius: 2, y: 1)
+                            .background(Theme.surface, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                     }
                     .buttonStyle(PressableStyle())
                     .foregroundStyle(.primary)
                     .disabled(isJoining)
                 }
             }
-            HStack(spacing: 8) {
-                Button {
-                    if !code.isEmpty { code.removeLast() }
-                    errorText = nil
-                } label: {
-                    Label("Delete", systemImage: "delete.left.fill")
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 50)
-                        .background(Theme.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                }
-                .buttonStyle(PressableStyle())
-                .foregroundStyle(.primary)
+            Button {
+                if !code.isEmpty { code.removeLast() }
+                errorText = nil
+            } label: {
+                Label("Delete", systemImage: "delete.left")
+                    .font(.body.weight(.medium))
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 50)
+                    .background(Theme.surface, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             }
+            .buttonStyle(PressableStyle())
+            .foregroundStyle(.primary)
         }
     }
 

@@ -23,7 +23,7 @@ struct RoundSetupView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 22) {
+                VStack(alignment: .leading, spacing: 30) {
                     courseSection
                     if let selectedCourse {
                         if !selectedCourse.tees.isEmpty { teeSection(selectedCourse) }
@@ -33,7 +33,8 @@ struct RoundSetupView: View {
                         summary(selectedCourse)
                     }
                 }
-                .padding()
+                .padding(.horizontal, Theme.gutter)
+                .padding(.vertical, 12)
                 .animation(.snappySpring, value: withFriends)
                 .animation(.snappySpring, value: selectedCourse?.id)
             }
@@ -51,7 +52,7 @@ struct RoundSetupView: View {
     // MARK: - Sections
 
     private var courseSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 4) {
             SectionHeader(title: "Course")
             NavigationLink {
                 CoursePickerView { picked in
@@ -59,45 +60,34 @@ struct RoundSetupView: View {
                     teeID = picked.defaultTee?.id
                 }
             } label: {
-                HStack(spacing: 14) {
-                    Image(systemName: selectedCourse?.gameType.symbolName ?? "magnifyingglass")
-                        .font(.headline)
-                        .foregroundStyle(.white)
-                        .frame(width: 46, height: 46)
-                        .background(Theme.gradient(for: selectedCourse?.gameType ?? .golf), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(selectedCourse?.name ?? "Choose a course").font(.headline)
-                        Text(selectedCourse.map { "\($0.gameType.displayName) · \($0.holeCount) holes · Par \($0.par)" } ?? "Search, nearby or your own")
-                            .font(.caption).foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    Image(systemName: "chevron.right").foregroundStyle(.tertiary)
-                }
-                .foregroundStyle(.primary)
-                .cardStyle(padding: 12)
+                NavigationRowLabel(
+                    title: selectedCourse?.name ?? "Choose a course",
+                    subtitle: selectedCourse.map { "\($0.gameType.displayName) · \($0.holeCount) holes · Par \($0.par)" } ?? "Search, nearby or your own",
+                    systemImage: selectedCourse?.gameType.symbolName ?? "magnifyingglass"
+                )
             }
             .buttonStyle(PressableStyle())
         }
     }
 
     private func teeSection(_ course: Course) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             SectionHeader(title: "Tee")
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     ForEach(course.tees) { tee in
-                        Chip(title: tee.name, systemImage: "circle.fill", isSelected: tee.id == (teeID ?? course.defaultTee?.id), tint: Color(hexString: tee.colorHex) ?? Theme.fairway) {
+                        Chip(title: tee.name, swatch: Color(hexString: tee.colorHex) ?? .gray, isSelected: tee.id == (teeID ?? course.defaultTee?.id)) {
                             teeID = tee.id
                         }
                     }
                 }
-                .padding(2)
+                .padding(1)
             }
         }
     }
 
     private var holesSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             SectionHeader(title: "Holes")
             Picker("Holes", selection: $holes) {
                 ForEach(HoleSelection.allCases) { Text($0.displayName).tag($0) }
@@ -107,82 +97,41 @@ struct RoundSetupView: View {
     }
 
     private var playersSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            SectionHeader(title: "Who's playing?")
-            HStack(spacing: 10) {
-                modeCard(title: "Just me", subtitle: "Solo round", systemImage: "person.fill", selected: !withFriends) { withFriends = false }
-                modeCard(title: "With friends", subtitle: "Share a join code", systemImage: "person.3.fill", selected: withFriends) { withFriends = true }
-            }
+        VStack(alignment: .leading, spacing: 4) {
+            SectionHeader(title: "Who's playing")
+            RadioRow(title: "Just me", subtitle: "A solo round", systemImage: "person", isSelected: !withFriends) { withFriends = false }
+            Hairline().padding(.leading, 38)
+            RadioRow(title: "With friends", subtitle: "Share a four-letter join code", systemImage: "person.2", isSelected: withFriends) { withFriends = true }
         }
-    }
-
-    private func modeCard(title: String, subtitle: String, systemImage: String, selected: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            VStack(alignment: .leading, spacing: 8) {
-                Image(systemName: systemImage).font(.title3.weight(.semibold))
-                Text(title).font(.headline)
-                Text(subtitle).font(.caption).opacity(0.8)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(14)
-            .foregroundStyle(selected ? .white : .primary)
-            .background {
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(selected ? AnyShapeStyle(Theme.heroGradient) : AnyShapeStyle(Theme.card))
-            }
-        }
-        .buttonStyle(PressableStyle())
-        .sensoryFeedback(.selection, trigger: selected)
     }
 
     private func matchSection(_ course: Course) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 4) {
             SectionHeader(title: "Match")
-            TextField("Match name", text: $matchName)
-                .font(.headline)
-                .padding(14)
-                .background(Theme.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            VStack(spacing: 8) {
-                ForEach(ScoringFormat.allCases) { option in
-                    Button {
-                        format = option
-                    } label: {
-                        HStack(spacing: 12) {
-                            Image(systemName: option.symbolName)
-                                .font(.headline)
-                                .frame(width: 32)
-                                .foregroundStyle(format == option ? Theme.fairway : .secondary)
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text(option.displayName).font(.subheadline.weight(.semibold))
-                                Text(option.summary).font(.caption).foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            Image(systemName: format == option ? "checkmark.circle.fill" : "circle")
-                                .foregroundStyle(format == option ? Theme.fairway : Color.secondary.opacity(0.5))
-                                .contentTransition(.symbolEffect(.replace))
-                        }
-                        .foregroundStyle(.primary)
-                        .padding(12)
-                        .background(Theme.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    }
-                    .buttonStyle(PressableStyle())
+            UnderlineField(title: "Name", text: $matchName)
+                .padding(.vertical, 10)
+            DividedList(ScoringFormat.allCases, inset: 38) { option in
+                RadioRow(title: option.displayName, subtitle: option.summary, systemImage: option.symbolName, isSelected: format == option) {
+                    format = option
                 }
             }
+            Hairline()
             Toggle(isOn: $useHandicaps) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Use handicaps").font(.subheadline.weight(.semibold))
-                    Text("Net scores using each player's index").font(.caption).foregroundStyle(.secondary)
+                    Text("Use handicaps").font(.body.weight(.medium))
+                    Text("Net scores using each player's index").font(.footnote).foregroundStyle(.secondary)
                 }
             }
-            .padding(12)
-            .background(Theme.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .tint(Theme.fairway)
+            .padding(.vertical, 12)
             if !app.isOnline {
-                Label("Offline demo: simulated friends will join your lobby. Set up online play in Settings to play with real friends.", systemImage: "wifi.slash")
-                    .font(.caption)
+                Label("Offline demo: simulated friends will join your lobby. Set up online play in Settings to play real friends.", systemImage: "wifi.slash")
+                    .font(.footnote)
                     .foregroundStyle(.secondary)
+                    .padding(.top, 4)
             }
         }
-        .transition(.move(edge: .bottom).combined(with: .opacity))
+        .transition(.opacity.combined(with: .move(edge: .top)))
     }
 
     private func summary(_ course: Course) -> some View {
@@ -191,14 +140,16 @@ struct RoundSetupView: View {
         let lengths = numbers.compactMap { course.hole($0)?.length(for: tee) }
         let totalLength: Double? = lengths.isEmpty ? nil : lengths.reduce(0, +)
         let strokes = courseHandicap(course, tee: tee, holes: numbers)
-        return HStack(spacing: 10) {
-            StatTile(title: "Par", value: "\(course.par(for: numbers))", subtitle: "\(numbers.count) holes", systemImage: "flag.fill")
-            if let totalLength {
-                StatTile(title: "Length", value: app.units.distanceNumber(totalLength), subtitle: app.units.system.distanceUnit, systemImage: "ruler", tint: Theme.water)
-            }
-            if let strokes {
-                StatTile(title: "Strokes", value: "\(strokes)", subtitle: "Course hcp", systemImage: "plusminus", tint: Theme.gold)
-            }
+        var items = [MetricItem(label: "Par", value: "\(course.par(for: numbers))", detail: "\(numbers.count) holes")]
+        if let totalLength {
+            items.append(MetricItem(label: "Length", value: app.units.distanceNumber(totalLength), detail: app.units.system.distanceUnit))
+        }
+        if let strokes {
+            items.append(MetricItem(label: "Strokes", value: "\(strokes)", detail: "Course handicap"))
+        }
+        return VStack(alignment: .leading, spacing: 0) {
+            SectionHeader(title: "Summary")
+            MetricGrid(items: items, columns: 3)
         }
     }
 
@@ -217,15 +168,16 @@ struct RoundSetupView: View {
             Task { await start() }
         } label: {
             HStack {
-                if isCreating { ProgressView().tint(.white) }
+                if isCreating { ProgressView().tint(Theme.onAccent) }
                 Text(withFriends ? "Create lobby" : "Tee off")
             }
         }
-        .buttonStyle(PrimaryButtonStyle(gradient: Theme.gradient(for: selectedCourse?.gameType ?? .golf)))
+        .buttonStyle(PrimaryButtonStyle())
         .disabled(selectedCourse == nil || isCreating)
-        .padding(.horizontal)
+        .padding(.horizontal, Theme.gutter)
         .padding(.vertical, 10)
-        .background(.bar)
+        .background(Theme.background)
+        .overlay(alignment: .top) { Hairline() }
     }
 
     // MARK: - Actions
@@ -309,12 +261,13 @@ struct CoursePickerView: View {
                 Button {
                     showEditor = true
                 } label: {
-                    Label("Create a course", systemImage: "plus.circle.fill")
+                    Label("Create a course", systemImage: "plus")
                 }
             } footer: {
                 Text("Handy for mini golf, pitch & putt or anywhere that isn't listed.")
             }
         }
+        .flatList()
         .navigationTitle("Choose course")
         .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search courses")
         .task(id: query) {

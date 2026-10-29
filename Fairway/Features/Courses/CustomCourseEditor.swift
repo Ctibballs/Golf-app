@@ -17,7 +17,7 @@ struct CustomCourseEditor: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            List {
                 Section("Course") {
                     TextField("Name", text: $name)
                         .font(.headline)
@@ -63,12 +63,12 @@ struct CustomCourseEditor: View {
                                 VStack(spacing: 2) {
                                     Text("\(index + 1)").font(.caption2.weight(.bold)).foregroundStyle(.secondary)
                                     Text("\(pars[index])")
-                                        .font(.rounded(20, weight: .heavy))
+                                        .font(.figure(20, weight: .medium))
                                         .contentTransition(.numericText(value: Double(pars[index])))
                                 }
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 8)
-                                .background(Theme.tint(for: gameType).opacity(0.12), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Theme.outline, lineWidth: 1))
                             }
                             .buttonStyle(PressableStyle())
                         }
@@ -84,6 +84,7 @@ struct CustomCourseEditor: View {
                     }
                 }
             }
+            .flatList()
             .navigationTitle(existing == nil ? "New course" : "Edit scorecard")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

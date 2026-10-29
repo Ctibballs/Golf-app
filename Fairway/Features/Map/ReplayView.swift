@@ -250,17 +250,26 @@ private struct ReplayControls: View {
 
     var body: some View {
         let state = replay.frames(at: clock.time)
-        VStack(spacing: 12) {
+        VStack(alignment: .leading, spacing: 12) {
             if let hole = state.hole {
-                HStack {
-                    Text("Hole \(hole)").font(.headline)
-                    Spacer()
-                    ForEach(Array(rounds.enumerated()), id: \.element.id) { index, round in
-                        if let frame = state.frames[round.playerID] {
-                            HStack(spacing: 4) {
-                                Circle().fill(MapPalette.player(index)).frame(width: 8, height: 8)
-                                Text(shotLabel(frame, name: rounds.count > 1 ? round.playerName : nil))
-                                    .font(.caption.weight(.semibold))
+                HStack(alignment: .firstTextBaseline, spacing: 14) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        Eyebrow("Hole")
+                        Text("\(hole)")
+                            .font(.display(32, weight: .regular))
+                            .contentTransition(.numericText(value: Double(hole)))
+                    }
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 14) {
+                            ForEach(Array(rounds.enumerated()), id: \.element.id) { index, round in
+                                if let frame = state.frames[round.playerID] {
+                                    HStack(spacing: 5) {
+                                        Circle().fill(MapPalette.player(index)).frame(width: 7, height: 7)
+                                        Text(shotLabel(frame, name: rounds.count > 1 ? round.playerName : nil))
+                                            .font(.footnote.weight(.medium))
+                                            .monospacedDigit()
+                                    }
+                                }
                             }
                         }
                     }
@@ -268,16 +277,17 @@ private struct ReplayControls: View {
             }
 
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
+                HStack(spacing: 2) {
                     ForEach(replay.holes, id: \.hole) { segment in
+                        let selected = segment.hole == state.hole
                         Button {
                             clock.seek(to: segment.start)
                         } label: {
                             Text("\(segment.hole)")
-                                .font(.caption.weight(.bold))
+                                .font(.figure(13, weight: selected ? .semibold : .regular))
                                 .frame(width: 30, height: 30)
-                                .background(segment.hole == state.hole ? Theme.fairway : Color(uiColor: .tertiarySystemFill), in: Circle())
-                                .foregroundStyle(segment.hole == state.hole ? .white : .primary)
+                                .background(selected ? Theme.fairway : .clear, in: Circle())
+                                .foregroundStyle(selected ? Theme.onAccent : .primary)
                         }
                         .buttonStyle(.plain)
                     }
@@ -291,11 +301,11 @@ private struct ReplayControls: View {
                     clock.playing.toggle()
                 } label: {
                     Image(systemName: clock.playing ? "pause.fill" : "play.fill")
-                        .font(.title2)
+                        .font(.title3)
                         .contentTransition(.symbolEffect(.replace))
-                        .frame(width: 52, height: 52)
-                        .foregroundStyle(.white)
-                        .background(Theme.heroGradient, in: Circle())
+                        .frame(width: 48, height: 48)
+                        .foregroundStyle(Theme.onAccent)
+                        .background(Theme.fairway, in: Circle())
                 }
                 .buttonStyle(PressableStyle())
 
@@ -308,16 +318,19 @@ private struct ReplayControls: View {
                     }
                 } label: {
                     Text("\(clock.speed, specifier: "%g")×")
-                        .font(.subheadline.weight(.bold))
-                        .frame(width: 44, height: 36)
-                        .background(Color(uiColor: .tertiarySystemFill), in: Capsule())
+                        .font(.subheadline.weight(.semibold))
+                        .monospacedDigit()
+                        .foregroundStyle(.primary)
+                        .frame(width: 44, height: 32)
+                        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Theme.outline, lineWidth: 1))
                 }
             }
         }
-        .padding(16)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .padding(.horizontal)
-        .padding(.bottom, 8)
+        .padding(.horizontal, Theme.gutter)
+        .padding(.top, 14)
+        .padding(.bottom, 10)
+        .background(.regularMaterial)
+        .overlay(alignment: .top) { Hairline() }
     }
 
     private func shotLabel(_ frame: ReplayFrame, name: String?) -> String {

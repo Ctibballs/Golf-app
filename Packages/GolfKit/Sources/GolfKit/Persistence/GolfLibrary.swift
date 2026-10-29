@@ -49,7 +49,7 @@ public struct AppSettings: Codable, Hashable, Sendable {
 }
 
 /// Reference to a live match or tournament this device is part of.
-public struct ActiveGame: Codable, Hashable, Sendable {
+public struct ActiveGame: Codable, Hashable, Identifiable, Sendable {
     public enum Kind: String, Codable, Sendable { case match, tournament }
     public var kind: Kind
     public var id: UUID

@@ -10,36 +10,36 @@ struct HomeView: View {
     @State private var showJoin = false
     @State private var showCreateMatch = false
     @State private var showCreateTournament = false
-    @State private var appeared = false
 
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 22) {
-                    header
+                VStack(alignment: .leading, spacing: Theme.sectionSpacing) {
+                    header.reveal(0)
                     if let round = app.library.inProgressRound {
-                        ContinueRoundCard(round: round) { resume(round) }
+                        ContinueRoundRow(round: round) { resume(round) }
                             .transition(.move(edge: .top).combined(with: .opacity))
                     }
+                    HandicapSummary { selectedTab = .profile }
+                        .reveal(1)
+                    actions.reveal(2)
                     if !app.library.activeGames.isEmpty {
                         ActiveGamesSection()
                     }
-                    HandicapHeroCard()
-                        .onTapGesture { selectedTab = .profile }
-                    quickActions
                     if let weather {
-                        VStack(alignment: .leading, spacing: 10) {
+                        VStack(alignment: .leading, spacing: 14) {
                             SectionHeader(title: "Conditions", subtitle: weatherSubtitle)
-                            WeatherCard(report: weather, units: app.units)
+                            WeatherPanel(report: weather, units: app.units)
                         }
-                        .transition(.opacity.combined(with: .move(edge: .bottom)))
+                        .transition(.opacity)
                     }
                     recentRounds
                 }
-                .padding(.horizontal)
-                .padding(.bottom, 24)
+                .padding(.horizontal, Theme.gutter)
+                .padding(.top, 8)
+                .padding(.bottom, 32)
                 .animation(.snappySpring, value: app.library.inProgressRoundID)
-                .animation(.snappySpring, value: weather?.fetchedAt)
+                .animation(.gentle, value: weather?.fetchedAt)
             }
             .background(Theme.background)
             .toolbar(.hidden, for: .navigationBar)
@@ -56,57 +56,66 @@ struct HomeView: View {
     // MARK: - Sections
 
     private var header: some View {
-        HStack(alignment: .center) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(greeting.uppercased())
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(.secondary)
-                    .tracking(1)
-                Text(app.profile.name)
-                    .font(.rounded(34, weight: .heavy))
+        HStack(alignment: .center, spacing: 16) {
+            VStack(alignment: .leading, spacing: 6) {
+                Eyebrow(Date().formatted(.dateTime.weekday(.wide).day().month(.wide)))
+                Text("\(greeting),\n\(app.profile.name)")
+                    .font(.display(32))
+                    .lineSpacing(2)
             }
             Spacer()
             Button { selectedTab = .profile } label: {
-                AvatarView(avatar: app.profile.avatar, size: 52)
-                    .scaleEffect(appeared ? 1 : 0.5)
-                    .rotationEffect(.degrees(appeared ? 0 : -30))
+                AvatarView(avatar: app.profile.avatar, size: 44)
             }
             .buttonStyle(PressableStyle())
         }
-        .padding(.top, 8)
-        .onAppear { withAnimation(.playful.delay(0.1)) { appeared = true } }
+        .padding(.top, 12)
     }
 
-    private var quickActions: some View {
-        LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
-            QuickActionTile(title: "New round", subtitle: "Solo or group", systemImage: "figure.golf", gradient: Theme.heroGradient) { showSetup = true }
-            QuickActionTile(title: "Join game", subtitle: "Enter a code", systemImage: "rectangle.and.pencil.and.ellipsis", gradient: Theme.sunsetGradient) { showJoin = true }
-            QuickActionTile(title: "Host match", subtitle: "Invite friends", systemImage: "person.3.fill", gradient: Theme.skyGradient) { showCreateMatch = true }
-            QuickActionTile(title: "Tournament", subtitle: "Multi-round event", systemImage: "trophy.fill", gradient: Theme.goldGradient) { showCreateTournament = true }
+    private var actions: some View {
+        VStack(spacing: 14) {
+            Button { showSetup = true } label: {
+                HStack {
+                    Image(systemName: "figure.golf")
+                    Text("Start a round")
+                    Spacer()
+                    Image(systemName: "arrow.right")
+                }
+                .padding(.horizontal, 18)
+            }
+            .buttonStyle(PrimaryButtonStyle(height: 56))
+
+            HStack(spacing: 0) {
+                ActionCell(title: "Join", subtitle: "Enter a code", systemImage: "number") { showJoin = true }
+                Rectangle().fill(Theme.hairline).frame(width: 0.5)
+                ActionCell(title: "Host", subtitle: "Play friends", systemImage: "person.2") { showCreateMatch = true }
+                    .padding(.leading, 14)
+                Rectangle().fill(Theme.hairline).frame(width: 0.5)
+                ActionCell(title: "Tournament", subtitle: "Multi-round", systemImage: "trophy") { showCreateTournament = true }
+                    .padding(.leading, 14)
+            }
+            .fixedSize(horizontal: false, vertical: true)
+            .overlay(alignment: .top) { Hairline() }
+            .overlay(alignment: .bottom) { Hairline() }
         }
     }
 
     @ViewBuilder
     private var recentRounds: some View {
-        let rounds = Array(app.library.completedRounds.prefix(4))
-        VStack(alignment: .leading, spacing: 10) {
-            SectionHeader(title: "Recent rounds", actionTitle: rounds.isEmpty ? nil : "Stats") { selectedTab = .stats }
+        let rounds = Array(app.library.completedRounds.prefix(5))
+        VStack(alignment: .leading, spacing: 4) {
+            SectionHeader(title: "Recent rounds", actionTitle: rounds.isEmpty ? nil : "All stats") { selectedTab = .stats }
             if rounds.isEmpty {
                 EmptyStateView(
                     title: "No rounds yet",
                     message: "Start a round and your scores, stats and handicap build from there.",
-                    systemImage: "flag.checkered",
+                    systemImage: "flag",
                     actionTitle: "Start a round"
                 ) { showSetup = true }
-                .cardStyle()
             } else {
-                VStack(spacing: 10) {
-                    ForEach(rounds) { round in
-                        NavigationLink(value: round) {
-                            RoundRow(round: round)
-                        }
+                DividedList(rounds) { round in
+                    NavigationLink(value: round) { RoundRow(round: round) }
                         .buttonStyle(PressableStyle())
-                    }
                 }
             }
         }
@@ -148,11 +157,11 @@ struct HomeView: View {
 
 // MARK: - Components
 
-struct QuickActionTile: View {
+/// One of the secondary actions under the main button.
+struct ActionCell: View {
     let title: String
     let subtitle: String
     let systemImage: String
-    let gradient: LinearGradient
     let action: () -> Void
     @State private var tapped = 0
 
@@ -161,55 +170,56 @@ struct QuickActionTile: View {
             tapped += 1
             action()
         } label: {
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 8) {
                 Image(systemName: systemImage)
-                    .font(.title2.weight(.semibold))
+                    .font(.body.weight(.medium))
+                    .foregroundStyle(Theme.fairway)
                     .symbolEffect(.bounce, value: tapped)
-                Spacer(minLength: 0)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title).font(.headline)
-                    Text(subtitle).font(.caption).opacity(0.85)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(title).font(.subheadline.weight(.semibold))
+                    Text(subtitle).font(.caption).foregroundStyle(.secondary)
                 }
             }
-            .foregroundStyle(.white)
-            .padding(16)
-            .frame(maxWidth: .infinity, minHeight: 120, alignment: .leading)
-            .background(gradient, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-            .shadow(color: .black.opacity(0.12), radius: 10, y: 5)
+            .foregroundStyle(.primary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, 14)
+            .contentShape(Rectangle())
         }
         .buttonStyle(PressableStyle())
     }
 }
 
-struct ContinueRoundCard: View {
-    @Environment(AppModel.self) private var app
+/// A round in progress, marked with an accent rule down the side.
+struct ContinueRoundRow: View {
     let round: Round
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
             HStack(spacing: 14) {
-                ZStack {
-                    Circle().fill(.white.opacity(0.2))
-                    Text("\(round.nextHoleToPlay ?? round.holeNumbers.last ?? 1)")
-                        .font(.rounded(22, weight: .heavy))
-                }
-                .frame(width: 54, height: 54)
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack(spacing: 6) {
-                        LiveBadge(text: "IN PROGRESS")
-                            .colorScheme(.dark)
-                    }
+                VStack(alignment: .leading, spacing: 5) {
+                    LiveBadge(text: "In progress")
                     Text(round.course.name).font(.headline).lineLimit(1)
-                    Text("Thru \(round.holesPlayed) · \(Leaderboard.formatToPar(round.toPar))")
-                        .font(.subheadline).opacity(0.85)
+                    Text("Hole \(round.nextHoleToPlay ?? round.holeNumbers.last ?? 1) · thru \(round.holesPlayed) · \(Leaderboard.formatToPar(round.toPar))")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
                 }
                 Spacer()
-                Image(systemName: "play.circle.fill").font(.system(size: 34))
+                HStack(spacing: 4) {
+                    Text("Resume")
+                    Image(systemName: "chevron.right").font(.footnote.weight(.semibold))
+                }
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Theme.fairway)
             }
-            .foregroundStyle(.white)
-            .padding(16)
-            .background(Theme.gradient(for: round.gameType), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .foregroundStyle(.primary)
+            .padding(.leading, 16)
+            .padding(.vertical, 4)
+            .overlay(alignment: .leading) {
+                Rectangle().fill(Theme.flag).frame(width: 2)
+            }
+            .contentShape(Rectangle())
         }
         .buttonStyle(PressableStyle())
     }
@@ -220,26 +230,17 @@ struct ActiveGamesSection: View {
     @Environment(AppModel.self) private var app
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 4) {
             SectionHeader(title: "Your games")
-            ForEach(app.library.activeGames, id: \.id) { game in
+            DividedList(app.library.activeGames, inset: 38) { game in
                 Button {
                     app.present(game.kind == .match ? .match(game.id) : .tournament(game.id))
                 } label: {
-                    HStack(spacing: 12) {
-                        Image(systemName: game.kind == .match ? "person.3.fill" : "trophy.fill")
-                            .font(.headline)
-                            .foregroundStyle(.white)
-                            .frame(width: 42, height: 42)
-                            .background((game.kind == .match ? Theme.skyGradient : Theme.goldGradient), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(game.name).font(.headline).lineLimit(1)
-                            Text("Code \(JoinCode.spaced(game.code))").font(.caption.monospaced()).foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        Image(systemName: "chevron.right").foregroundStyle(.tertiary)
-                    }
-                    .cardStyle(padding: 12)
+                    NavigationRowLabel(
+                        title: game.name,
+                        subtitle: "\(game.kind == .match ? "Match" : "Tournament") · code \(JoinCode.spaced(game.code))",
+                        systemImage: game.kind == .match ? "person.2" : "trophy"
+                    )
                 }
                 .buttonStyle(PressableStyle())
                 .contextMenu {
@@ -252,122 +253,115 @@ struct ActiveGamesSection: View {
     }
 }
 
-struct HandicapHeroCard: View {
+/// The handicap index set large, with its recent trend.
+struct HandicapSummary: View {
     @Environment(AppModel.self) private var app
+    var action: () -> Void = {}
 
     var body: some View {
         let golf = app.handicap(for: .golf)
-        VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Label("Handicap index", systemImage: "chart.line.uptrend.xyaxis")
-                    .font(.subheadline.weight(.semibold))
-                    .opacity(0.9)
-                Spacer()
-                Text(sourceLabel(golf))
-                    .font(.caption.weight(.bold))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    .background(.white.opacity(0.2), in: Capsule())
-            }
-            HStack(alignment: .lastTextBaseline, spacing: 10) {
-                Text(golf.displayIndex)
-                    .font(.rounded(58, weight: .heavy))
-                    .contentTransition(.numericText(value: golf.index ?? 0))
-                if golf.index == nil {
-                    Text("\(golf.roundsUntilEstablished) more round\(golf.roundsUntilEstablished == 1 ? "" : "s") to go")
+        let history = golf.history.suffix(12).map(\.index)
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Eyebrow("Handicap index")
+                    Spacer()
+                    Eyebrow(sourceLabel(golf))
+                }
+                HStack(alignment: .lastTextBaseline, spacing: 12) {
+                    Text(golf.displayIndex)
+                        .font(.display(68, weight: .regular))
+                        .contentTransition(.numericText(value: golf.index ?? 0))
+                    if let change = change(history) {
+                        HStack(spacing: 3) {
+                            Image(systemName: change <= 0 ? "arrow.down.right" : "arrow.up.right")
+                            Text(String(format: "%.1f", abs(change)))
+                        }
                         .font(.subheadline.weight(.semibold))
-                        .opacity(0.9)
+                        .foregroundStyle(change <= 0 ? Theme.fairway : Theme.flag)
+                    }
+                    Spacer(minLength: 0)
+                    if history.count > 1 {
+                        AnimatedSparkline(values: history)
+                            .frame(width: 96, height: 36)
+                            .padding(.bottom, 10)
+                    }
                 }
-                Spacer()
-                if golf.history.count > 1 {
-                    Sparkline(values: golf.history.suffix(12).map(\.index))
-                        .stroke(.white, style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
-                        .frame(width: 90, height: 40)
+                if golf.index == nil {
+                    Text("\(golf.roundsUntilEstablished) more round\(golf.roundsUntilEstablished == 1 ? "" : "s") to establish your index")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                HStack(spacing: 28) {
+                    ForEach([GameType.pitchAndPutt, .miniGolf]) { type in
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(type.displayName).font(.caption).foregroundStyle(.secondary)
+                            Text(app.handicap(for: type).displayIndex).font(.figure(17, weight: .semibold))
+                        }
+                    }
+                    Spacer()
                 }
             }
-            HStack(spacing: 8) {
-                ForEach([GameType.pitchAndPutt, .miniGolf]) { type in
-                    let result = app.handicap(for: type)
-                    InfoPill(text: "\(type.displayName) \(result.displayIndex)", systemImage: type.symbolName, tint: .white)
-                }
-            }
+            .foregroundStyle(.primary)
+            .contentShape(Rectangle())
         }
-        .foregroundStyle(.white)
-        .padding(18)
-        .background(Theme.heroGradient, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
-        .shadow(color: Theme.deepGreen.opacity(0.3), radius: 16, y: 8)
+        .buttonStyle(PressableStyle())
+    }
+
+    /// Change across the recent history (negative is an improvement).
+    private func change(_ values: [Double]) -> Double? {
+        guard let first = values.first, let last = values.last, values.count > 1 else { return nil }
+        let delta = last - first
+        return abs(delta) >= 0.05 ? delta : nil
     }
 
     private func sourceLabel(_ result: HandicapResult) -> String {
         switch result.source {
-        case .manual: return "MANUAL"
-        case .calculated: return "WHS"
-        case .notEstablished: return "PENDING"
+        case .manual: return "Manual"
+        case .calculated: return "WHS · \(result.eligibleRounds) scores"
+        case .notEstablished: return "Pending"
         }
-    }
-}
-
-/// A tiny line chart shape. Lower values (better handicaps) are drawn higher.
-struct Sparkline: Shape {
-    let values: [Double]
-    var invert = true
-
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        guard values.count > 1, let lo = values.min(), let hi = values.max() else { return path }
-        let span = max(0.0001, hi - lo)
-        for (i, v) in values.enumerated() {
-            let x = rect.minX + rect.width * CGFloat(i) / CGFloat(values.count - 1)
-            let normalized = CGFloat((v - lo) / span)
-            let y = invert ? rect.minY + rect.height * normalized : rect.maxY - rect.height * normalized
-            if i == 0 { path.move(to: CGPoint(x: x, y: y)) } else { path.addLine(to: CGPoint(x: x, y: y)) }
-        }
-        return path
     }
 }
 
 struct RoundRow: View {
-    @Environment(AppModel.self) private var app
     let round: Round
 
     var body: some View {
-        HStack(spacing: 14) {
-            VStack(spacing: 0) {
+        HStack(alignment: .center, spacing: 14) {
+            VStack(alignment: .leading, spacing: 0) {
                 Text(round.date, format: .dateTime.day())
-                    .font(.rounded(22, weight: .bold))
+                    .font(.figure(20, weight: .medium))
                 Text(round.date, format: .dateTime.month(.abbreviated))
-                    .font(.caption.weight(.semibold))
+                    .font(.eyebrow)
                     .textCase(.uppercase)
                     .foregroundStyle(.secondary)
             }
-            .frame(width: 48)
+            .frame(width: 38, alignment: .leading)
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text(round.course.name).font(.headline).lineLimit(1)
-                HStack(spacing: 6) {
-                    Image(systemName: round.gameType.symbolName)
-                        .foregroundStyle(Theme.tint(for: round.gameType))
-                    Text(subtitle)
-                }
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(round.course.name).font(.body.weight(.medium)).lineLimit(1)
+                Text(subtitle)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
-            Spacer()
-            VStack(alignment: .trailing, spacing: 2) {
+            Spacer(minLength: 8)
+            VStack(alignment: .trailing, spacing: 1) {
                 Text("\(round.totalStrokes)")
-                    .font(.rounded(24, weight: .bold))
-                ToParText(toPar: round.toPar, font: .caption.weight(.bold))
+                    .font(.figure(20, weight: .semibold))
+                ToParText(toPar: round.toPar, font: .footnote.weight(.medium))
             }
         }
         .foregroundStyle(.primary)
-        .cardStyle(padding: 14)
+        .padding(.vertical, 12)
+        .contentShape(Rectangle())
     }
 
     private var subtitle: String {
-        var parts = ["\(round.holesPlayed) holes"]
+        var parts = [round.gameType.displayName, "\(round.holesPlayed) holes"]
         if round.matchID != nil { parts.append("Match") }
         if round.hasShotData { parts.append("GPS") }
-        if let putts = round.totalPutts { parts.append("\(putts) putts") }
         return parts.joined(separator: " · ")
     }
 }

@@ -55,39 +55,27 @@ private struct LiveRoundContent: View {
             VStack(spacing: 0) {
                 topBar
                 ScrollView {
-                    VStack(spacing: 16) {
-                        HoleHeaderCard(controller: controller)
+                    VStack(alignment: .leading, spacing: 28) {
+                        HoleHeader(controller: controller)
                             .id(controller.currentHole)
                             .transition(.push(from: controller.direction))
                         if controller.tracksShots {
                             mapSection
-                            ShotTrackerCard(controller: controller)
+                            ShotTracker(controller: controller)
                         }
-                        ForEach(controller.players) { player in
-                            PlayerScoreCard(controller: controller, player: player, isMe: player.id == controller.myID)
-                        }
-                        if session != nil {
-                            Button {
-                                showGuestPrompt = true
-                            } label: {
-                                Label("Add a guest without the app", systemImage: "person.badge.plus")
-                                    .font(.subheadline.weight(.semibold))
-                            }
-                            .buttonStyle(SecondaryButtonStyle())
-                        }
+                        scoring
                     }
-                    .padding(.horizontal)
-                    .padding(.vertical, 12)
+                    .padding(.horizontal, Theme.gutter)
+                    .padding(.top, 18)
+                    .padding(.bottom, 24)
                 }
                 .scrollDismissesKeyboard(.interactively)
                 bottomBar
             }
 
-            ConfettiView(trigger: controller.celebrationTrigger)
-                .ignoresSafeArea()
             if let text = controller.celebrationText {
                 CelebrationBanner(title: text, subtitle: "Hole \(controller.currentHole) · \(controller.course.name)", systemImage: "sparkles")
-                    .padding(.top, 70)
+                    .padding(.top, 64)
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
@@ -140,7 +128,7 @@ private struct LiveRoundContent: View {
     // MARK: - Top bar
 
     private var topBar: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: 8) {
             HStack(spacing: 12) {
                 Menu {
                     Button("Scorecard", systemImage: "tablecells") { showScorecard = true }
@@ -151,25 +139,30 @@ private struct LiveRoundContent: View {
                     }
                 } label: {
                     Image(systemName: "ellipsis")
-                        .font(.headline)
-                        .frame(width: 38, height: 38)
-                        .background(Theme.card, in: Circle())
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(.primary)
+                        .frame(width: 36, height: 36)
+                        .overlay(Circle().strokeBorder(Theme.outline, lineWidth: 1))
                 }
                 VStack(alignment: .leading, spacing: 1) {
                     Text(controller.course.name).font(.headline).lineLimit(1)
-                    Text(subtitle).font(.caption).foregroundStyle(.secondary)
+                    Text(subtitle)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                        .contentTransition(.numericText())
                 }
                 Spacer()
                 if let weather = controller.weather {
                     WeatherChip(report: weather, units: controller.units, holeBearing: controller.holeLayout?.bearing)
                 }
             }
-            .padding(.horizontal)
+            .padding(.horizontal, Theme.gutter)
             HoleStrip(controller: controller)
         }
         .padding(.top, 6)
-        .padding(.bottom, 8)
-        .background(.bar)
+        .background(Theme.background)
+        .overlay(alignment: .bottom) { Hairline() }
     }
 
     private var subtitle: String {
@@ -189,55 +182,71 @@ private struct LiveRoundContent: View {
 
     @ViewBuilder
     private var mapSection: some View {
-        if let distances = controller.greenDistances {
-            GreenDistancesView(distances: distances, units: controller.units, playsLike: controller.playsLike)
-                .foregroundStyle(.white)
-                .padding(.vertical, 12)
-                .padding(.bottom, controller.playsLike != nil ? 6 : 0)
-                .background(Theme.deepGreen.gradient, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-                .transition(.opacity.combined(with: .scale(scale: 0.95)))
-        }
-        if let layout = controller.layout, controller.holeLayout != nil {
-            ZStack(alignment: .top) {
-                HoleMapView(
-                    course: controller.course,
-                    layout: layout,
-                    holeNumber: controller.currentHole,
-                    shots: controller.shots,
-                    holeLocation: controller.score(for: controller.myID, hole: controller.currentHole)?.holeLocation,
-                    position: controller.position,
-                    others: otherPlayers,
-                    target: $controller.measureTarget,
-                    units: controller.units,
-                    onPlaceBall: controller.placeBallMode ? { controller.manualBall = $0 } : nil
-                )
-                .frame(height: 340)
-                .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-
-                // Controls sit at the top so they never cover the Apple Maps attribution.
-                HStack {
-                    Toggle(isOn: $controller.placeBallMode) {
-                        Label(controller.placeBallMode ? "Tap map to place ball" : "Using GPS", systemImage: controller.placeBallMode ? "hand.tap.fill" : "location.fill")
-                            .font(.caption.weight(.bold))
-                    }
-                    .toggleStyle(.button)
-                    .tint(.white)
-                    .buttonStyle(.bordered)
-                    .background(.black.opacity(0.35), in: Capsule())
-                    Spacer()
-                    Button { expandedMap = true } label: {
-                        Image(systemName: "arrow.up.left.and.arrow.down.right")
-                            .font(.caption.weight(.bold))
-                            .foregroundStyle(.white)
-                            .frame(width: 34, height: 34)
-                            .background(.black.opacity(0.45), in: Circle())
-                    }
-                }
-                .padding(10)
+        VStack(alignment: .leading, spacing: 14) {
+            if let distances = controller.greenDistances {
+                GreenDistancesView(distances: distances, units: controller.units, playsLike: controller.playsLike)
+                    .padding(.vertical, 12)
+                    .overlay(alignment: .top) { Hairline() }
+                    .overlay(alignment: .bottom) { Hairline() }
+                    .transition(.opacity)
             }
-            .frame(height: 340)
-        } else if controller.tracksShots {
-            NoMapCard(controller: controller)
+            if let layout = controller.layout, controller.holeLayout != nil {
+                ZStack(alignment: .top) {
+                    HoleMapView(
+                        course: controller.course,
+                        layout: layout,
+                        holeNumber: controller.currentHole,
+                        shots: controller.shots,
+                        holeLocation: controller.score(for: controller.myID, hole: controller.currentHole)?.holeLocation,
+                        position: controller.position,
+                        others: otherPlayers,
+                        target: $controller.measureTarget,
+                        units: controller.units,
+                        onPlaceBall: controller.placeBallMode ? { controller.manualBall = $0 } : nil
+                    )
+                    .frame(height: 340)
+
+                    // Controls sit at the top so they never cover the Apple Maps attribution.
+                    HStack {
+                        Button {
+                            controller.placeBallMode.toggle()
+                        } label: {
+                            Label(controller.placeBallMode ? "Tap map to place ball" : "Using GPS", systemImage: controller.placeBallMode ? "hand.tap" : "location.fill")
+                                .font(.footnote.weight(.semibold))
+                                .contentTransition(.symbolEffect(.replace))
+                                .padding(.horizontal, 12)
+                                .frame(height: 32)
+                                .background(.regularMaterial, in: Capsule())
+                        }
+                        .buttonStyle(PressableStyle())
+                        .foregroundStyle(.primary)
+                        Spacer()
+                        Button { expandedMap = true } label: {
+                            Image(systemName: "arrow.up.left.and.arrow.down.right")
+                                .font(.footnote.weight(.semibold))
+                                .frame(width: 32, height: 32)
+                                .background(.regularMaterial, in: Circle())
+                        }
+                        .buttonStyle(PressableStyle())
+                        .foregroundStyle(.primary)
+                    }
+                    .padding(12)
+                }
+                .frame(height: 340)
+                .overlay(alignment: .top) { Hairline() }
+                .overlay(alignment: .bottom) { Hairline() }
+                .padding(.horizontal, -Theme.gutter)
+            } else if controller.tracksShots {
+                Label {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("No hole map for this course").font(.subheadline.weight(.medium))
+                        Text("OpenStreetMap hasn't mapped these holes yet. GPS still measures every shot.")
+                            .font(.footnote).foregroundStyle(.secondary)
+                    }
+                } icon: {
+                    Image(systemName: "map").foregroundStyle(.secondary)
+                }
+            }
         }
     }
 
@@ -249,6 +258,29 @@ private struct LiveRoundContent: View {
         }
     }
 
+    // MARK: - Scoring
+
+    private var scoring: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            SectionHeader(title: "Score", subtitle: session == nil ? nil : "Everyone in your group")
+            DividedList(controller.players, inset: 48) { player in
+                PlayerScoreRow(controller: controller, player: player, isMe: player.id == controller.myID)
+            }
+            if session != nil {
+                Hairline()
+                Button {
+                    showGuestPrompt = true
+                } label: {
+                    Label("Add a guest without the app", systemImage: "person.badge.plus")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(Theme.fairway)
+                        .padding(.vertical, 14)
+                }
+                .buttonStyle(PressableStyle())
+            }
+        }
+    }
+
     // MARK: - Bottom bar
 
     private func leaderboardLabel(_ session: MatchSession) -> String {
@@ -257,13 +289,12 @@ private struct LiveRoundContent: View {
     }
 
     private var bottomBar: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 10) {
             Button { controller.previous() } label: {
-                Image(systemName: "chevron.left").font(.headline).frame(width: 50, height: 50)
+                Image(systemName: "chevron.left")
             }
-            .buttonStyle(CircleIconButtonStyle(size: 50))
+            .buttonStyle(CircleIconButtonStyle(size: 48))
             .disabled(controller.isFirstHole)
-            .opacity(controller.isFirstHole ? 0.4 : 1)
 
             if let session {
                 Button { showLeaderboard = true } label: {
@@ -272,13 +303,8 @@ private struct LiveRoundContent: View {
                         Text(leaderboardLabel(session))
                             .contentTransition(.numericText())
                     }
-                    .font(.subheadline.weight(.bold))
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 50)
-                    .background(Theme.card, in: Capsule())
                 }
-                .buttonStyle(PressableStyle())
-                .foregroundStyle(.primary)
+                .buttonStyle(SecondaryButtonStyle(height: 48))
             } else {
                 Spacer()
             }
@@ -286,32 +312,26 @@ private struct LiveRoundContent: View {
             if controller.isLastHole {
                 Button { confirmFinish = true } label: {
                     Label("Finish", systemImage: "flag.checkered")
-                        .font(.headline)
-                        .padding(.horizontal, 18)
-                        .frame(height: 50)
-                        .foregroundStyle(.white)
-                        .background(Theme.heroGradient, in: Capsule())
                 }
-                .buttonStyle(PressableStyle())
+                .buttonStyle(PrimaryButtonStyle(height: 48))
+                .frame(maxWidth: 150)
             } else {
                 Button { controller.next() } label: {
                     HStack(spacing: 6) {
                         Text("Hole \(controller.holeNumbers[min(controller.holeIndex + 1, controller.holeNumbers.count - 1)])")
-                        Image(systemName: "chevron.right")
+                            .contentTransition(.numericText())
+                        Image(systemName: "chevron.right").font(.footnote.weight(.bold))
                     }
-                    .font(.headline)
-                    .padding(.horizontal, 18)
-                    .frame(height: 50)
-                    .foregroundStyle(.white)
-                    .background(Theme.heroGradient, in: Capsule())
                 }
-                .buttonStyle(PressableStyle())
+                .buttonStyle(PrimaryButtonStyle(height: 48))
+                .frame(maxWidth: 150)
             }
         }
-        .padding(.horizontal)
+        .padding(.horizontal, Theme.gutter)
         .padding(.top, 10)
         .padding(.bottom, 6)
-        .background(.bar)
+        .background(Theme.background)
+        .overlay(alignment: .top) { Hairline() }
     }
 }
 
@@ -324,28 +344,35 @@ private struct HoleStrip: View {
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
+                HStack(spacing: 4) {
                     ForEach(controller.holeNumbers, id: \.self) { number in
                         let score = controller.score(for: controller.myID, hole: number)
+                        let isCurrent = number == controller.currentHole
                         Button { controller.go(to: number) } label: {
-                            VStack(spacing: 3) {
-                                Text("\(number)").font(.caption2.weight(.bold)).foregroundStyle(.secondary)
+                            VStack(spacing: 4) {
+                                Text("\(number)")
+                                    .font(.eyebrow)
+                                    .foregroundStyle(isCurrent ? .primary : .secondary)
                                 ScoreBadge(strokes: score?.strokes, par: controller.course.hole(number)?.par ?? 4, size: 26)
-                            }
-                            .frame(width: 36, height: 52)
-                            .background {
-                                if number == controller.currentHole {
-                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                        .fill(Theme.fairway.opacity(0.18))
-                                        .matchedGeometryEffect(id: "current", in: selection)
+                                ZStack {
+                                    if isCurrent {
+                                        Rectangle()
+                                            .fill(Color.primary)
+                                            .frame(height: 2)
+                                            .matchedGeometryEffect(id: "current", in: selection)
+                                    } else {
+                                        Color.clear.frame(height: 2)
+                                    }
                                 }
                             }
+                            .frame(width: 34)
+                            .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                         .id(number)
                     }
                 }
-                .padding(.horizontal)
+                .padding(.horizontal, Theme.gutter)
             }
             .onChange(of: controller.currentHole) { _, hole in
                 withAnimation(.snappySpring) { proxy.scrollTo(hole, anchor: .center) }
@@ -357,41 +384,38 @@ private struct HoleStrip: View {
 
 // MARK: - Hole header
 
-private struct HoleHeaderCard: View {
+private struct HoleHeader: View {
     @Bindable var controller: LiveRoundController
 
     var body: some View {
-        HStack(alignment: .center, spacing: 16) {
-            VStack(spacing: 0) {
-                Text("HOLE").font(.caption2.weight(.heavy)).opacity(0.8)
-                Text("\(controller.currentHole)")
-                    .font(.rounded(54, weight: .heavy))
-                    .contentTransition(.numericText(value: Double(controller.currentHole)))
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .lastTextBaseline, spacing: 16) {
+                VStack(alignment: .leading, spacing: 0) {
+                    Eyebrow("Hole")
+                    Text("\(controller.currentHole)")
+                        .font(.display(64, weight: .regular))
+                        .contentTransition(.numericText(value: Double(controller.currentHole)))
+                }
+                Spacer()
+                HStack(alignment: .lastTextBaseline, spacing: 22) {
+                    fact("Par", "\(controller.par)")
+                    if let length = controller.hole?.length(for: controller.round?.tee) ?? controller.holeLayout?.length {
+                        fact("Length", controller.units.distance(length))
+                    }
+                    if let si = controller.hole?.strokeIndex {
+                        fact("S.I.", "\(si)")
+                    }
+                }
+                .padding(.bottom, 12)
             }
-            .frame(width: 92)
-
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 8) {
-                    InfoPill(text: "Par \(controller.par)", tint: .white)
-                    if let si = controller.hole?.strokeIndex { InfoPill(text: "S.I. \(si)", tint: .white) }
-                }
-                if let length = controller.hole?.length(for: controller.round?.tee) ?? controller.holeLayout?.length {
-                    Text(controller.units.distance(length))
-                        .font(.title2.weight(.bold))
-                }
-                if let bearing = controller.holeLayout?.bearing, let weather = controller.weather {
-                    let effect = WindEffect(windSpeed: weather.current.windSpeed, windFromDirection: weather.current.windDirection, shotBearing: bearing)
-                    Label("\(effect.description) · \(controller.units.windSpeed(weather.current.windSpeed))", systemImage: "wind")
-                        .font(.caption.weight(.semibold))
-                        .opacity(0.9)
-                }
+            if let bearing = controller.holeLayout?.bearing, let weather = controller.weather {
+                let effect = WindEffect(windSpeed: weather.current.windSpeed, windFromDirection: weather.current.windDirection, shotBearing: bearing)
+                Label("\(effect.description) · \(controller.units.windSpeed(weather.current.windSpeed))", systemImage: "wind")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
-            Spacer(minLength: 0)
         }
-        .foregroundStyle(.white)
-        .padding(16)
-        .background(Theme.gradient(for: controller.course.gameType), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .shadow(color: Theme.deepGreen.opacity(0.25), radius: 12, y: 6)
+        .contentShape(Rectangle())
         .gesture(
             DragGesture(minimumDistance: 30).onEnded { value in
                 if value.translation.width < -60 { controller.next() }
@@ -399,30 +423,18 @@ private struct HoleHeaderCard: View {
             }
         )
     }
-}
 
-/// When a course has no mapped geometry, GPS still measures shot lengths.
-private struct NoMapCard: View {
-    @Bindable var controller: LiveRoundController
-
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "map")
-                .font(.title2)
-                .foregroundStyle(Theme.water)
-            VStack(alignment: .leading, spacing: 2) {
-                Text("No hole map for this course").font(.subheadline.weight(.semibold))
-                Text("OpenStreetMap hasn't mapped these holes yet. GPS still measures every shot.")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
+    private func fact(_ label: String, _ value: String) -> some View {
+        VStack(alignment: .trailing, spacing: 2) {
+            Eyebrow(label)
+            Text(value).font(.figure(19, weight: .medium))
         }
-        .cardStyle()
     }
 }
 
 // MARK: - Shot tracker
 
-private struct ShotTrackerCard: View {
+private struct ShotTracker: View {
     @Environment(AppModel.self) private var app
     @Bindable var controller: LiveRoundController
     @State private var markCount = 0
@@ -433,47 +445,51 @@ private struct ShotTrackerCard: View {
         return "Club"
     }
 
+    private var numberedShots: [NumberedShot] {
+        ShotTracking.linked(controller.shots, holeLocation: controller.score(for: controller.myID, hole: controller.currentHole)?.holeLocation)
+            .enumerated()
+            .map { NumberedShot(number: $0.offset + 1, shot: $0.element) }
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Label("Shot tracking", systemImage: "point.topleft.down.to.point.bottomright.curvepath.fill")
-                    .font(.headline)
-                Spacer()
+        VStack(alignment: .leading, spacing: 14) {
+            SectionHeader(title: "Shot tracking") {
                 if let accuracy = app.location.accuracy, !controller.placeBallMode {
-                    Text("GPS ±\(Int(accuracy)) m").font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
+                    Text("GPS ±\(Int(accuracy)) m").font(.caption).monospacedDigit().foregroundStyle(.secondary)
                 }
             }
 
             if let live = controller.liveShotDistance {
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text("Last shot").font(.subheadline).foregroundStyle(.secondary)
                     Text(controller.units.distance(live))
-                        .font(.rounded(30, weight: .heavy))
+                        .font(.display(34, weight: .regular))
                         .contentTransition(.numericText(value: live))
                         .animation(.snappySpring, value: Int(live))
-                    Text("and counting").font(.caption).foregroundStyle(.tertiary)
+                    Text("and counting").font(.footnote).foregroundStyle(.tertiary)
                 }
                 .transition(.opacity)
             }
 
-            if !controller.shots.isEmpty {
-                VStack(spacing: 6) {
-                    ForEach(Array(ShotTracking.linked(controller.shots, holeLocation: controller.score(for: controller.myID, hole: controller.currentHole)?.holeLocation).enumerated()), id: \.element.id) { index, shot in
-                        HStack(spacing: 10) {
-                            BallMarker(label: "\(index + 1)", color: shot.isPutt ? .white : Theme.gold, size: 22)
-                            Text(shot.club?.displayName ?? shot.lie.displayName).font(.subheadline.weight(.semibold))
-                            Text("from \(shot.lie.displayName.lowercased())").font(.caption).foregroundStyle(.secondary)
-                            if shot.penaltyStrokes > 0 {
-                                InfoPill(text: "+\(shot.penaltyStrokes)", tint: Theme.flag)
-                            }
-                            Spacer()
-                            Text(shot.distance.map { shot.isPutt ? controller.units.shortDistance($0) : controller.units.distance($0) } ?? "…")
-                                .font(.subheadline.weight(.bold))
-                                .monospacedDigit()
+            if !numberedShots.isEmpty {
+                DividedList(numberedShots, inset: 34) { item in
+                    HStack(spacing: 12) {
+                        BallMarker(label: "\(item.number)", color: item.shot.isPutt ? .white : Theme.gold, size: 22)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(item.shot.club?.displayName ?? item.shot.lie.displayName).font(.subheadline.weight(.medium))
+                            Text("From the \(item.shot.lie.displayName.lowercased())").font(.caption).foregroundStyle(.secondary)
                         }
-                        .transition(.move(edge: .leading).combined(with: .opacity))
+                        if item.shot.penaltyStrokes > 0 {
+                            Text("+\(item.shot.penaltyStrokes)").font(.caption.weight(.bold)).foregroundStyle(Theme.flag)
+                        }
+                        Spacer()
+                        Text(item.shot.distance.map { item.shot.isPutt ? controller.units.shortDistance($0) : controller.units.distance($0) } ?? "…")
+                            .font(.figure(16, weight: .semibold))
                     }
+                    .padding(.vertical, 9)
+                    .transition(.move(edge: .leading).combined(with: .opacity))
                 }
+                .overlay(alignment: .bottom) { Hairline() }
             }
 
             HStack(spacing: 8) {
@@ -483,11 +499,7 @@ private struct ShotTrackerCard: View {
                         Button(club.displayName) { controller.selectedClub = club }
                     }
                 } label: {
-                    Label(clubLabel, systemImage: "figure.golf")
-                        .font(.subheadline.weight(.semibold))
-                        .padding(.horizontal, 12)
-                        .frame(height: 40)
-                        .background(Color(uiColor: .tertiarySystemFill), in: Capsule())
+                    optionLabel(clubLabel, systemImage: "figure.golf")
                 }
                 Menu {
                     Button("Auto-detect") { controller.selectedLie = nil }
@@ -495,21 +507,16 @@ private struct ShotTrackerCard: View {
                         Button(lie.displayName, systemImage: lie.symbolName) { controller.selectedLie = lie }
                     }
                 } label: {
-                    Label(controller.selectedLie?.displayName ?? "Lie", systemImage: controller.selectedLie?.symbolName ?? "leaf")
-                        .font(.subheadline.weight(.semibold))
-                        .padding(.horizontal, 12)
-                        .frame(height: 40)
-                        .background(Color(uiColor: .tertiarySystemFill), in: Capsule())
+                    optionLabel(controller.selectedLie?.displayName ?? "Lie", systemImage: controller.selectedLie?.symbolName ?? "leaf")
                 }
                 Spacer()
                 if !controller.shots.isEmpty {
                     Button { controller.undoShot() } label: { Image(systemName: "arrow.uturn.backward") }
-                        .buttonStyle(CircleIconButtonStyle(tint: .secondary, size: 40))
-                    Button { controller.addPenaltyToLastShot() } label: { Text("+1").font(.subheadline.weight(.heavy)) }
-                        .buttonStyle(CircleIconButtonStyle(tint: Theme.flag, size: 40))
+                        .buttonStyle(CircleIconButtonStyle(tint: .secondary, size: 36))
+                    Button { controller.addPenaltyToLastShot() } label: { Text("+1").font(.footnote.weight(.bold)) }
+                        .buttonStyle(CircleIconButtonStyle(tint: Theme.flag, size: 36))
                 }
             }
-            .foregroundStyle(.primary)
 
             HStack(spacing: 10) {
                 Button {
@@ -517,6 +524,7 @@ private struct ShotTrackerCard: View {
                     withAnimation(.snappySpring) { controller.markShot() }
                 } label: {
                     Label(controller.shots.isEmpty ? "Mark tee shot" : "Mark shot \(controller.shots.count + 1)", systemImage: "scope")
+                        .contentTransition(.numericText())
                 }
                 .buttonStyle(PrimaryButtonStyle())
                 .disabled(controller.position == nil)
@@ -527,28 +535,37 @@ private struct ShotTrackerCard: View {
                     } label: {
                         Label("Holed", systemImage: "flag.fill")
                     }
-                    .buttonStyle(PrimaryButtonStyle(gradient: Theme.sunsetGradient))
-                    .frame(maxWidth: 140)
+                    .buttonStyle(SecondaryButtonStyle(tint: Theme.flag, height: 52))
+                    .frame(maxWidth: 130)
+                    .transition(.opacity.combined(with: .move(edge: .trailing)))
                 }
             }
             .sensoryFeedback(.impact(weight: .medium), trigger: markCount) { _, _ in app.hapticsEnabled }
 
             if controller.position == nil {
                 Text(app.location.isDenied
-                     ? "Location is off. Turn on \"Tap map to place ball\" to mark shots by hand."
-                     : "Waiting for GPS… or switch to \"Tap map to place ball\".")
-                    .font(.caption)
+                     ? "Location is off. Switch the map to \"Tap map to place ball\" to mark shots by hand."
+                     : "Waiting for GPS… or switch the map to \"Tap map to place ball\".")
+                    .font(.footnote)
                     .foregroundStyle(.secondary)
             }
         }
-        .cardStyle()
         .animation(.snappySpring, value: controller.shots)
+    }
+
+    private func optionLabel(_ title: String, systemImage: String) -> some View {
+        Label(title, systemImage: systemImage)
+            .font(.subheadline.weight(.medium))
+            .foregroundStyle(.primary)
+            .padding(.horizontal, 12)
+            .frame(height: 36)
+            .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Theme.outline, lineWidth: 1))
     }
 }
 
 // MARK: - Score entry
 
-private struct PlayerScoreCard: View {
+private struct PlayerScoreRow: View {
     @Environment(AppModel.self) private var app
     @Bindable var controller: LiveRoundController
     let player: Participant
@@ -557,26 +574,26 @@ private struct PlayerScoreCard: View {
     var body: some View {
         let score = controller.score(for: player.id, hole: controller.currentHole)
         let par = controller.par
-        VStack(spacing: 14) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 12) {
-                AvatarView(avatar: player.avatar, size: 40)
+                AvatarView(avatar: player.avatar, size: 36)
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
-                        Text(isMe ? "You" : player.name).font(.headline)
+                        Text(isMe ? "You" : player.name).font(.body.weight(.medium))
                         let dots = controller.strokesReceived(player)
                         if dots > 0 {
                             HStack(spacing: 2) {
-                                ForEach(0..<dots, id: \.self) { _ in Circle().fill(Theme.gold).frame(width: 6, height: 6) }
+                                ForEach(0..<dots, id: \.self) { _ in Circle().fill(Theme.gold).frame(width: 5, height: 5) }
                             }
                         }
                     }
                     if let score {
                         Text(score.scoreType(par: par).displayName)
-                            .font(.caption.weight(.semibold))
+                            .font(.footnote.weight(.medium))
                             .foregroundStyle(Theme.scoreColor(toPar: score.strokes - par))
                             .contentTransition(.interpolate)
                     } else {
-                        Text("Tap + or − to score").font(.caption).foregroundStyle(.secondary)
+                        Text("Par \(par) · tap + to score").font(.footnote).foregroundStyle(.secondary)
                     }
                 }
                 Spacer()
@@ -584,7 +601,7 @@ private struct PlayerScoreCard: View {
             }
 
             if controller.course.gameType.tracksGreens {
-                HStack(spacing: 10) {
+                HStack(spacing: 18) {
                     miniStepper(title: "Putts", value: score?.putts, minus: { controller.adjustPutts(-1, for: player.id) }, plus: { controller.adjustPutts(1, for: player.id) })
                     if controller.course.gameType.tracksFairways && par >= 4 {
                         fairwayPicker(score?.fairway)
@@ -592,67 +609,69 @@ private struct PlayerScoreCard: View {
                     if isMe {
                         miniStepper(title: "Pen.", value: score?.penalties ?? 0, minus: { controller.adjustPenalties(-1, for: player.id) }, plus: { controller.adjustPenalties(1, for: player.id) })
                     }
+                    Spacer(minLength: 0)
                 }
+                .padding(.leading, 48)
             }
         }
-        .cardStyle()
+        .padding(.vertical, 14)
         .sensoryFeedback(.increase, trigger: score?.strokes ?? 0) { _, _ in app.hapticsEnabled }
     }
 
     private func stepper(value: Int?, par: Int) -> some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 12) {
             Button { controller.adjustStrokes(-1, for: player.id) } label: { Image(systemName: "minus") }
-                .buttonStyle(CircleIconButtonStyle(size: 42))
+                .buttonStyle(CircleIconButtonStyle(size: 38))
             ZStack {
                 if let value {
-                    ScoreBadge(strokes: value, par: par, size: 52)
+                    ScoreBadge(strokes: value, par: par, size: 42)
                 } else {
-                    Text("–").font(.rounded(30, weight: .bold)).foregroundStyle(.tertiary)
+                    Text("–").font(.figure(24)).foregroundStyle(.tertiary)
                 }
             }
-            .frame(width: 58)
-            .animation(.playful, value: value)
+            .frame(width: 46, height: 46)
+            .pulseRing(trigger: isMe ? controller.celebrationTrigger : 0, color: Theme.flag)
+            .animation(.snappySpring, value: value)
             Button { controller.adjustStrokes(1, for: player.id) } label: { Image(systemName: "plus") }
-                .buttonStyle(CircleIconButtonStyle(size: 42))
+                .buttonStyle(CircleIconButtonStyle(size: 38))
         }
     }
 
     private func miniStepper(title: String, value: Int?, minus: @escaping () -> Void, plus: @escaping () -> Void) -> some View {
-        HStack(spacing: 6) {
-            Button(action: minus) { Image(systemName: "minus").font(.caption.weight(.bold)) }
-                .buttonStyle(CircleIconButtonStyle(tint: .secondary, size: 28))
+        HStack(spacing: 8) {
+            Button(action: minus) { Image(systemName: "minus") }
+                .buttonStyle(CircleIconButtonStyle(tint: .secondary, size: 26))
             VStack(spacing: 0) {
                 Text(value.map { "\($0)" } ?? "–")
-                    .font(.headline)
+                    .font(.figure(15, weight: .semibold))
                     .contentTransition(.numericText(value: Double(value ?? 0)))
-                Text(title).font(.caption2).foregroundStyle(.secondary)
+                Text(title.uppercased()).font(.system(size: 9, weight: .semibold)).tracking(0.6).foregroundStyle(.secondary)
             }
-            .frame(minWidth: 34)
-            Button(action: plus) { Image(systemName: "plus").font(.caption.weight(.bold)) }
-                .buttonStyle(CircleIconButtonStyle(tint: .secondary, size: 28))
+            .frame(minWidth: 30)
+            Button(action: plus) { Image(systemName: "plus") }
+                .buttonStyle(CircleIconButtonStyle(tint: .secondary, size: 26))
         }
-        .padding(6)
-        .background(Color(uiColor: .tertiarySystemFill), in: Capsule())
     }
 
     private func fairwayPicker(_ current: FairwayResult?) -> some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 0) {
             ForEach(FairwayResult.allCases) { result in
+                let selected = current == result
                 Button {
                     controller.setFairway(result, for: player.id)
                 } label: {
                     Image(systemName: result.symbolName)
-                        .font(.caption.weight(.bold))
-                        .frame(width: 30, height: 30)
-                        .foregroundStyle(current == result ? .white : .secondary)
-                        .background(current == result ? (result == .hit ? Theme.fairway : Theme.flag) : Color.clear, in: Circle())
+                        .font(.caption.weight(.semibold))
+                        .frame(width: 30, height: 28)
+                        .foregroundStyle(selected ? Theme.onAccent : .secondary)
+                        .background(selected ? (result == .hit ? Theme.fairway : Theme.flag) : Color.clear)
                 }
                 .buttonStyle(.plain)
             }
         }
-        .padding(4)
-        .background(Color(uiColor: .tertiarySystemFill), in: Capsule())
-        .animation(.snappySpring, value: current)
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Theme.outline, lineWidth: 1))
+        .animation(.easeOut(duration: 0.2), value: current)
     }
 }
 
@@ -674,8 +693,9 @@ private struct LiveScorecardSheet: View {
                     highlightedHole: controller.currentHole,
                     units: controller.units
                 )
-                .padding()
+                .padding(Theme.gutter)
             }
+            .background(Theme.background)
             .navigationTitle("Scorecard")
             .navigationBarTitleDisplayMode(.inline)
         }
@@ -713,30 +733,29 @@ private struct ExpandedHoleMap: View {
             HStack(alignment: .top) {
                 if let distances = controller.greenDistances {
                     GreenDistancesView(distances: distances, units: controller.units, playsLike: controller.playsLike)
-                        .foregroundStyle(.white)
-                        .frame(width: 230)
+                        .frame(width: 240)
                         .padding(.vertical, 10)
-                        .background(.black.opacity(0.5), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: Theme.corner, style: .continuous))
                 }
                 Spacer()
                 Button { dismiss() } label: {
                     Image(systemName: "xmark")
-                        .font(.headline)
-                        .foregroundStyle(.white)
+                        .font(.body.weight(.semibold))
                         .frame(width: 40, height: 40)
-                        .background(.black.opacity(0.5), in: Circle())
+                        .background(.regularMaterial, in: Circle())
                 }
+                .buttonStyle(PressableStyle())
+                .foregroundStyle(.primary)
             }
             .padding()
 
             VStack {
                 Spacer()
                 Text(controller.placeBallMode ? "Tap to place your ball" : "Tap anywhere to measure a layup")
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(.white)
+                    .font(.footnote.weight(.medium))
                     .padding(.horizontal, 14)
                     .padding(.vertical, 8)
-                    .background(.black.opacity(0.5), in: Capsule())
+                    .background(.regularMaterial, in: Capsule())
                     .padding(.bottom, 30)
             }
         }

@@ -100,11 +100,13 @@ public struct TournamentEntrant: Codable, Hashable, Identifiable, Sendable {
     }
 }
 
-public struct TournamentSnapshot: Codable, Hashable, Sendable {
+public struct TournamentSnapshot: Codable, Hashable, Identifiable, Sendable {
     public var tournament: Tournament
     public var entrants: [TournamentEntrant]
     /// Snapshots of every round that has started, keyed by round number.
     public var rounds: [Int: MatchSnapshot]
+
+    public var id: UUID { tournament.id }
 
     public init(tournament: Tournament, entrants: [TournamentEntrant], rounds: [Int: MatchSnapshot] = [:]) {
         self.tournament = tournament

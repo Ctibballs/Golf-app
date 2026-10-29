@@ -6,6 +6,10 @@ struct FairwayApp: App {
     @State private var app = AppModel()
     @Environment(\.scenePhase) private var scenePhase
 
+    init() {
+        NavigationBarStyle.apply()
+    }
+
     var body: some Scene {
         WindowGroup {
             RootView()
@@ -46,7 +50,7 @@ struct RootView: View {
                         .tabItem { Label("Profile", systemImage: "person.crop.circle") }
                         .tag(AppTab.profile)
                 }
-                .transition(.opacity.combined(with: .scale(scale: 1.04)))
+                .transition(.opacity)
             } else {
                 OnboardingView()
                     .transition(.opacity)
@@ -78,26 +82,11 @@ struct BannerOverlay: View {
 
     var body: some View {
         if let banner = app.banner {
-            HStack(spacing: 12) {
-                Image(systemName: icon(for: banner.style))
-                    .font(.title3.weight(.bold))
-                    .foregroundStyle(color(for: banner.style))
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(banner.title).font(.subheadline.weight(.bold))
-                    if let message = banner.message {
-                        Text(message).font(.caption).foregroundStyle(.secondary).lineLimit(3)
-                    }
-                }
-                Spacer(minLength: 0)
-            }
-            .padding(14)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .shadow(color: .black.opacity(0.15), radius: 12, y: 6)
-            .padding(.horizontal)
-            .padding(.top, 4)
-            .transition(.move(edge: .top).combined(with: .opacity))
-            .onTapGesture { withAnimation(.snappySpring) { app.banner = nil } }
-            .id(banner.id)
+            ToastView(title: banner.title, message: banner.message, systemImage: icon(for: banner.style), iconColor: color(for: banner.style))
+                .padding(.top, 4)
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .onTapGesture { withAnimation(.snappySpring) { app.banner = nil } }
+                .id(banner.id)
         }
     }
 
@@ -112,10 +101,10 @@ struct BannerOverlay: View {
 
     private func color(for style: Banner.Style) -> Color {
         switch style {
-        case .info: return Theme.water
-        case .success: return Theme.fairway
-        case .error: return Theme.flag
-        case .celebration: return Theme.gold
+        case .info: return Theme.OnToast.info
+        case .success: return Theme.OnToast.success
+        case .error: return Theme.OnToast.error
+        case .celebration: return Theme.OnToast.celebration
         }
     }
 }

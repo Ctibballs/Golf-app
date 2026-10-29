@@ -12,7 +12,7 @@ struct SettingsView: View {
     @State private var confirmReset = false
 
     var body: some View {
-        Form {
+        List {
             Section {
                 Picker("Units", selection: app.binding(\.settings.units)) {
                     ForEach(UnitSystem.allCases) { Text($0.displayName).tag($0) }
@@ -93,6 +93,7 @@ struct SettingsView: View {
                 Button("Reset everything", role: .destructive) { confirmReset = true }
             }
         }
+        .flatList()
         .navigationTitle("Settings")
         .onAppear {
             project = app.library.settings.online.supabaseProject
@@ -137,20 +138,18 @@ struct AboutView: View {
     var body: some View {
         List {
             Section {
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack(spacing: 12) {
-                        FlagMark().frame(width: 44, height: 50)
-                            .padding(8)
-                            .background(Theme.heroGradient, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                        VStack(alignment: .leading) {
-                            Text("Fairway").font(.title2.weight(.heavy))
-                            Text("Golf, pitch & putt and mini golf with friends").font(.caption).foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(spacing: 14) {
+                        FlagMark().frame(width: 40, height: 48)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Fairway").font(.display(28))
+                            Text("Golf, pitch & putt and mini golf with friends").font(.footnote).foregroundStyle(.secondary)
                         }
                     }
                     Text("Built on free and open data. No ads, no accounts, no subscriptions.")
                         .font(.subheadline)
                 }
-                .padding(.vertical, 6)
+                .padding(.vertical, 8)
             }
 
             Section("Data sources") {
@@ -167,13 +166,14 @@ struct AboutView: View {
                     .foregroundStyle(.secondary)
             }
         }
+        .flatList()
         .navigationTitle("About")
     }
 
     private func source(_ name: String, detail: String, url: String) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             if let link = URL(string: url) {
-                Link(name, destination: link).font(.subheadline.weight(.semibold))
+                Link(name, destination: link).font(.body.weight(.medium)).tint(Theme.fairway)
             }
             Text(detail).font(.caption).foregroundStyle(.secondary)
         }

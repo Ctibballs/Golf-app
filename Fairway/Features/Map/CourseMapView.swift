@@ -21,13 +21,15 @@ struct CourseMapView: View {
             if let layout {
                 map(layout)
                     .ignoresSafeArea(edges: .bottom)
-                VStack(spacing: 10) {
+                VStack(spacing: 0) {
                     if let focus, let hole = layout.hole(focus) {
                         measureBar(hole)
+                        Hairline()
                     }
-                    holeCarousel(layout)
+                    holeStrip(layout)
                 }
-                .padding(.bottom, 8)
+                .background(.regularMaterial)
+                .overlay(alignment: .top) { Hairline() }
             } else if isLoading {
                 ProgressView("Mapping the course…").controlSize(.large)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -115,70 +117,70 @@ struct CourseMapView: View {
     }
 
     private func measureBar(_ hole: HoleLayout) -> some View {
-        HStack(spacing: 14) {
-            if let origin = measureOrigin(hole), let distances = hole.greenDistances(from: origin) {
-                VStack(alignment: .leading, spacing: 0) {
-                    Text(origin == hole.teePoint ? "From the tee" : "From you").font(.caption2.weight(.bold)).opacity(0.8)
-                    Text("\(app.units.distanceNumber(distances.front)) · \(app.units.distanceNumber(distances.center)) · \(app.units.distanceNumber(distances.back)) \(app.units.system.distanceUnit)")
-                        .font(.subheadline.weight(.bold))
+        let info = course.hole(hole.number)
+        return HStack(alignment: .center, spacing: 16) {
+            VStack(alignment: .leading, spacing: 0) {
+                Eyebrow("Hole")
+                Text("\(hole.number)")
+                    .font(.display(36, weight: .regular))
+                    .contentTransition(.numericText(value: Double(hole.number)))
+            }
+            VStack(alignment: .leading, spacing: 3) {
+                Text(holeFacts(hole, info: info)).font(.subheadline.weight(.medium)).monospacedDigit()
+                if let origin = measureOrigin(hole), let distances = hole.greenDistances(from: origin) {
+                    Text("\(origin == hole.teePoint ? "From the tee" : "From you"): \(app.units.distanceNumber(distances.front)) · \(app.units.distanceNumber(distances.center)) · \(app.units.distanceNumber(distances.back)) \(app.units.system.distanceUnit)")
+                        .font(.footnote)
                         .monospacedDigit()
+                        .foregroundStyle(.secondary)
                 }
             }
-            Spacer()
+            Spacer(minLength: 4)
             if let weather, let bearing = hole.bearing {
                 WindBadge(speed: weather.current.windSpeed, fromDirection: weather.current.windDirection, units: app.units, holeBearing: bearing)
             } else if target == nil {
-                Text("Tap the map to measure").font(.caption.weight(.semibold)).opacity(0.85)
+                Text("Tap to measure").font(.caption).foregroundStyle(.secondary)
             }
         }
-        .foregroundStyle(.white)
-        .padding(12)
-        .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .padding(.horizontal)
-        .transition(.move(edge: .bottom).combined(with: .opacity))
+        .padding(.horizontal, Theme.gutter)
+        .padding(.vertical, 12)
+        .transition(.opacity)
     }
 
-    private func holeCarousel(_ layout: CourseLayout) -> some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            LazyHStack(spacing: 10) {
-                ForEach(layout.holes) { hole in
-                    let info = course.hole(hole.number)
-                    Button {
-                        withAnimation(.snappySpring) { focus = hole.number }
-                    } label: {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Hole \(hole.number)").font(.headline)
-                            HStack(spacing: 6) {
-                                Text("Par \(info?.par ?? hole.par ?? 4)")
-                                if let length = info?.length(for: course.defaultTee) ?? hole.length {
-                                    Text("· \(app.units.distance(length))")
-                                }
-                            }
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                            if let si = info?.strokeIndex {
-                                Text("Stroke index \(si)").font(.caption2).foregroundStyle(.tertiary)
-                            }
+    private func holeFacts(_ hole: HoleLayout, info: HoleInfo?) -> String {
+        var parts = ["Par \(info?.par ?? hole.par ?? 4)"]
+        if let length = info?.length(for: course.defaultTee) ?? hole.length { parts.append(app.units.distance(length)) }
+        if let si = info?.strokeIndex { parts.append("S.I. \(si)") }
+        return parts.joined(separator: " · ")
+    }
+
+    private func holeStrip(_ layout: CourseLayout) -> some View {
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 4) {
+                    ForEach(layout.holes) { hole in
+                        let selected = focus == hole.number
+                        Button {
+                            withAnimation(.snappySpring) { focus = hole.number }
+                        } label: {
+                            Text("\(hole.number)")
+                                .font(.figure(15, weight: selected ? .semibold : .regular))
+                                .foregroundStyle(selected ? Theme.onAccent : .primary)
+                                .frame(width: 36, height: 36)
+                                .background(selected ? Theme.fairway : .clear, in: Circle())
+                                .contentShape(Circle())
                         }
-                        .frame(width: 130, alignment: .leading)
-                        .padding(12)
-                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(focus == hole.number ? Theme.fairway : .clear, lineWidth: 2.5))
-                    }
-                    .buttonStyle(PressableStyle())
-                    .foregroundStyle(.primary)
-                    .scrollTransition { content, phase in
-                        content
-                            .scaleEffect(phase.isIdentity ? 1 : 0.92)
-                            .opacity(phase.isIdentity ? 1 : 0.7)
+                        .buttonStyle(PressableStyle())
+                        .id(hole.number)
                     }
                 }
+                .padding(.horizontal, Theme.gutter)
+                .padding(.vertical, 10)
             }
-            .scrollTargetLayout()
-            .padding(.horizontal)
+            .onChange(of: focus) { _, hole in
+                guard let hole else { return }
+                withAnimation(.snappySpring) { proxy.scrollTo(hole, anchor: .center) }
+            }
         }
-        .scrollTargetBehavior(.viewAligned)
-        .frame(height: 96)
     }
 
     private func showOverview() {

@@ -53,7 +53,7 @@ struct HoleMapView: View {
                 ForEach(numberedShots) { item in
                     if let end = item.shot.end, let distance = item.shot.distance {
                         MapPolyline(coordinates: [item.shot.start.coordinate, end.coordinate])
-                            .stroke(item.shot.isPutt ? Color.white.opacity(0.8) : Theme.gold, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                            .stroke(item.shot.isPutt ? Color.white.opacity(0.85) : MapPalette.shot, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
                         if distance > 8 {
                             Annotation("", coordinate: GeoMath.interpolate(item.shot.start, end, fraction: 0.5).coordinate) {
                                 DistanceCallout(text: item.shot.isPutt ? units.shortDistance(distance) : units.distance(distance))
@@ -130,12 +130,12 @@ struct YouMarker: View {
     var body: some View {
         ZStack {
             Circle()
-                .fill(Theme.water.opacity(0.3))
+                .fill(Color.blue.opacity(0.3))
                 .frame(width: 34, height: 34)
                 .scaleEffect(pulse ? 1.2 : 0.7)
                 .opacity(pulse ? 0 : 1)
             Circle()
-                .fill(Theme.water)
+                .fill(Color.blue)
                 .frame(width: 16, height: 16)
                 .overlay(Circle().strokeBorder(.white, lineWidth: 3))
                 .shadow(radius: 2)
@@ -153,31 +153,27 @@ struct GreenDistancesView: View {
     var playsLike: Double?
 
     var body: some View {
-        HStack(spacing: 0) {
-            column("Front", distances.front, emphasized: false)
-            column("Centre", distances.center, emphasized: true)
-            column("Back", distances.back, emphasized: false)
-        }
-        .overlay(alignment: .bottom) {
+        VStack(spacing: 6) {
+            HStack(alignment: .lastTextBaseline, spacing: 0) {
+                column("Front", distances.front, emphasized: false)
+                column("Centre", distances.center, emphasized: true)
+                column("Back", distances.back, emphasized: false)
+            }
             if let playsLike, abs(playsLike - distances.center) >= 3 {
                 Text("Plays like \(units.distance(playsLike))")
-                    .font(.caption2.weight(.bold))
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(Theme.gold.opacity(0.9), in: Capsule())
-                    .foregroundStyle(.black)
-                    .offset(y: 12)
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(Theme.gold)
+                    .transition(.opacity)
             }
         }
     }
 
     private func column(_ title: String, _ metres: Double, emphasized: Bool) -> some View {
         VStack(spacing: 2) {
-            Text(title.uppercased())
-                .font(.caption2.weight(.bold))
-                .opacity(0.75)
+            Eyebrow(title)
             Text(units.distanceNumber(metres))
-                .font(.rounded(emphasized ? 40 : 24, weight: .heavy))
+                .font(emphasized ? Font.display(46, weight: .regular) : Font.figure(22, weight: .regular))
+                .foregroundStyle(emphasized ? .primary : .secondary)
                 .contentTransition(.numericText(value: metres))
                 .animation(.snappySpring, value: Int(metres))
         }

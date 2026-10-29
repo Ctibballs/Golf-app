@@ -19,14 +19,15 @@ struct HandicapView: View {
     var body: some View {
         let result = app.handicap(for: gameType)
         ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                hero(result)
-                modeCard
+            VStack(alignment: .leading, spacing: Theme.sectionSpacing) {
+                hero(result).reveal(0)
+                modeSection.reveal(1)
                 if result.history.count > 1 { trendChart(result) }
                 differentials(result)
                 explanation
             }
-            .padding()
+            .padding(.horizontal, Theme.gutter)
+            .padding(.bottom, 32)
             .animation(.snappySpring, value: settings.wrappedValue)
         }
         .background(Theme.background)
@@ -35,44 +36,41 @@ struct HandicapView: View {
     }
 
     private func hero(_ result: HandicapResult) -> some View {
-        HStack(spacing: 20) {
+        HStack(alignment: .center, spacing: 22) {
             ZStack {
-                Circle().stroke(.white.opacity(0.25), lineWidth: 10)
+                Circle().stroke(Theme.fill, lineWidth: 3)
                 Circle()
                     .trim(from: 0, to: progress(result))
-                    .stroke(.white, style: StrokeStyle(lineWidth: 10, lineCap: .round))
+                    .stroke(Theme.fairway, style: StrokeStyle(lineWidth: 3, lineCap: .round))
                     .rotationEffect(.degrees(-90))
-                    .animation(.playful, value: progress(result))
+                    .animation(.easeOut(duration: 1.0).delay(0.2), value: progress(result))
                 VStack(spacing: 0) {
                     Text(result.displayIndex)
-                        .font(.rounded(36, weight: .heavy))
+                        .font(.display(40, weight: .regular))
                         .contentTransition(.numericText(value: result.index ?? 0))
-                    Text("INDEX").font(.caption2.weight(.heavy)).opacity(0.8)
+                    Eyebrow("Index")
                 }
             }
-            .frame(width: 130, height: 130)
+            .frame(width: 136, height: 136)
 
             VStack(alignment: .leading, spacing: 6) {
                 switch result.source {
                 case .manual:
                     Text("Manual index").font(.headline)
                     if let calculated = result.calculatedIndex {
-                        Text("Calculated from your rounds: \(HandicapCalculator.format(calculated))").font(.caption).opacity(0.85)
+                        Text("Calculated from your rounds: \(HandicapCalculator.format(calculated))").font(.footnote).foregroundStyle(.secondary)
                     }
                 case .calculated:
                     Text(gameType.usesWorldHandicapSystem ? "World Handicap System" : "Casual index").font(.headline)
-                    Text("From \(result.eligibleRounds) score\(result.eligibleRounds == 1 ? "" : "s")").font(.caption).opacity(0.85)
+                    Text("From \(result.eligibleRounds) score\(result.eligibleRounds == 1 ? "" : "s")").font(.footnote).foregroundStyle(.secondary)
                 case .notEstablished:
                     Text("Almost there").font(.headline)
                     Text("\(result.eligibleRounds) of \(result.roundsRequired) rounds played. Your index appears after \(result.roundsUntilEstablished) more.")
-                        .font(.caption).opacity(0.85)
+                        .font(.footnote).foregroundStyle(.secondary)
                 }
             }
         }
-        .foregroundStyle(.white)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(20)
-        .background(Theme.gradient(for: gameType), in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .padding(.top, 12)
     }
 
     private func progress(_ result: HandicapResult) -> CGFloat {
@@ -80,8 +78,9 @@ struct HandicapView: View {
         return CGFloat(result.eligibleRounds) / CGFloat(max(1, result.roundsRequired))
     }
 
-    private var modeCard: some View {
-        VStack(alignment: .leading, spacing: 14) {
+    private var modeSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            SectionHeader(title: "How it's set")
             Picker("Mode", selection: settings.mode) {
                 Text("Automatic").tag(HandicapMode.automatic)
                 Text("Manual").tag(HandicapMode.manual)
@@ -91,9 +90,9 @@ struct HandicapView: View {
             if settings.wrappedValue.mode == .automatic {
                 Stepper(value: settings.roundsRequired, in: HandicapSettings.minimumRounds...HandicapSettings.maximumRounds) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Generate after \(settings.wrappedValue.roundsRequired) rounds").font(.subheadline.weight(.semibold))
+                        Text("Generate after \(settings.wrappedValue.roundsRequired) rounds").font(.body.weight(.medium))
                         Text(gameType.usesWorldHandicapSystem ? "WHS needs at least 3 scores (54 holes)." : "More rounds give a steadier index.")
-                            .font(.caption).foregroundStyle(.secondary)
+                            .font(.footnote).foregroundStyle(.secondary)
                     }
                 }
                 .transition(.opacity)
@@ -105,57 +104,47 @@ struct HandicapView: View {
                 .transition(.opacity)
             }
         }
-        .cardStyle()
     }
 
     private func trendChart(_ result: HandicapResult) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Index over time").font(.headline)
+        VStack(alignment: .leading, spacing: 14) {
+            SectionHeader(title: "Index over time", subtitle: "Lower is better, so the line rises as you improve")
             Chart(result.history, id: \.date) { point in
                 LineMark(x: .value("Date", point.date), y: .value("Index", point.index))
                     .foregroundStyle(Theme.fairway)
+                    .lineStyle(StrokeStyle(lineWidth: 1.75))
                     .interpolationMethod(.stepEnd)
-                PointMark(x: .value("Date", point.date), y: .value("Index", point.index))
-                    .foregroundStyle(Theme.fairway)
-                    .symbolSize(24)
             }
             .chartYScale(domain: .automatic(includesZero: false, reversed: true))
             .frame(height: 160)
-            Text("Lower is better, so the chart rises as you improve.").font(.caption2).foregroundStyle(.secondary)
         }
-        .cardStyle()
     }
 
     private func differentials(_ result: HandicapResult) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            SectionHeader(title: "Recent scores", subtitle: result.differentials.isEmpty ? nil : "Highlighted scores count toward your index")
+        VStack(alignment: .leading, spacing: 4) {
+            SectionHeader(title: "Recent scores", subtitle: result.differentials.isEmpty ? nil : "Green scores count toward your index")
             if result.differentials.isEmpty {
                 Text("Complete a \(gameType.displayName.lowercased()) round of at least nine holes to start building your index.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-                    .cardStyle()
+                    .padding(.vertical, 12)
             } else {
-                VStack(spacing: 0) {
-                    ForEach(result.differentials) { differential in
-                        HStack(spacing: 12) {
-                            Circle()
-                                .fill(differential.usedInIndex ? Theme.fairway : Color.secondary.opacity(0.3))
-                                .frame(width: 10, height: 10)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(differential.courseName).font(.subheadline.weight(.semibold)).lineLimit(1)
-                                Text(detail(differential)).font(.caption2).foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            Text(String(format: "%.1f", differential.value))
-                                .font(.headline.monospacedDigit())
-                                .foregroundStyle(differential.usedInIndex ? Theme.fairway : .primary)
+                DividedList(result.differentials, inset: 20) { differential in
+                    HStack(spacing: 12) {
+                        Circle()
+                            .fill(differential.usedInIndex ? Theme.fairway : Theme.fill)
+                            .frame(width: 8, height: 8)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(differential.courseName).font(.body.weight(.medium)).lineLimit(1)
+                            Text(detail(differential)).font(.caption).foregroundStyle(.secondary)
                         }
-                        .padding(.vertical, 10)
-                        .padding(.horizontal, 12)
-                        Divider().padding(.leading, 34)
+                        Spacer()
+                        Text(String(format: "%.1f", differential.value))
+                            .font(.figure(17, weight: differential.usedInIndex ? .semibold : .regular))
+                            .foregroundStyle(differential.usedInIndex ? Theme.fairway : .primary)
                     }
+                    .padding(.vertical, 10)
                 }
-                .background(Theme.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             }
         }
     }
@@ -171,17 +160,18 @@ struct HandicapView: View {
     }
 
     private var explanation: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("How it's worked out").font(.headline)
-            if gameType.usesWorldHandicapSystem {
-                Text("Each round becomes a score differential: (113 ÷ slope) × (adjusted score − course rating). Holes are capped at net double bogey. Your index averages the best 8 of your last 20 differentials (fewer while you're getting started, with the official adjustments). Courses without a published rating use par and a slope of 113.")
-            } else {
-                Text("Pitch & putt and mini golf have no official ratings, so Fairway averages the best half of your last ten rounds' scores over par, scaled to 18 holes.")
+        VStack(alignment: .leading, spacing: 10) {
+            SectionHeader(title: "How it's worked out")
+            Group {
+                if gameType.usesWorldHandicapSystem {
+                    Text("Each round becomes a score differential: (113 ÷ slope) × (adjusted score − course rating). Holes are capped at net double bogey. Your index averages the best 8 of your last 20 differentials (fewer while you're getting started, with the official adjustments). Courses without a published rating use par and a slope of 113.")
+                } else {
+                    Text("Pitch & putt and mini golf have no official ratings, so Fairway averages the best half of your last ten rounds' scores over par, scaled to 18 holes.")
+                }
             }
+            .font(.footnote)
+            .foregroundStyle(.secondary)
         }
-        .font(.footnote)
-        .foregroundStyle(.secondary)
-        .cardStyle()
     }
 }
 
@@ -196,7 +186,7 @@ struct ManualIndexEditor: View {
                     .buttonStyle(CircleIconButtonStyle(size: 40))
                 Spacer()
                 Text(HandicapCalculator.format(index))
-                    .font(.rounded(40, weight: .heavy))
+                    .font(.display(44, weight: .regular))
                     .contentTransition(.numericText(value: index))
                     .animation(.snappySpring, value: index)
                 Spacer()
@@ -204,6 +194,7 @@ struct ManualIndexEditor: View {
                     .buttonStyle(CircleIconButtonStyle(size: 40))
             }
             Slider(value: $index, in: -10...54, step: 0.1)
+                .tint(Theme.fairway)
             Text("Enter your official index. Plus handicaps are shown with a +.")
                 .font(.caption).foregroundStyle(.secondary)
         }

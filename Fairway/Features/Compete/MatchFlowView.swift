@@ -31,7 +31,8 @@ struct MatchFlowView: View {
                         RoundSummaryView(roundID: id, session: session) { app.presentation = nil }
                     } else {
                         NavigationStack {
-                            ScrollView { MatchResultsCard(session: session).padding() }
+                            ScrollView { MatchResultsSection(session: session).padding(.horizontal, Theme.gutter) }
+                                .background(Theme.background)
                                 .toolbar { Button("Done") { app.presentation = nil } }
                         }
                     }
@@ -99,45 +100,20 @@ struct LobbyView: View {
     @State private var copied = false
 
     var body: some View {
-        ZStack {
-            Theme.heroGradient.ignoresSafeArea()
-            FloatingBalls().ignoresSafeArea()
-
-            VStack(spacing: 22) {
-                header
-                VStack(spacing: 12) {
-                    Text("ROOM CODE")
-                        .font(.caption.weight(.heavy))
-                        .tracking(3)
-                        .opacity(0.85)
-                    CodeTiles(code: session.match.code, tileSize: 66)
-                    HStack(spacing: 10) {
-                        ShareLink(item: session.shareMessage) {
-                            Label("Invite", systemImage: "square.and.arrow.up")
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .tint(.white.opacity(0.25))
-                        Button {
-                            UIPasteboard.general.string = session.match.code
-                            copied = true
-                        } label: {
-                            Label(copied ? "Copied" : "Copy", systemImage: copied ? "checkmark" : "doc.on.doc")
-                                .contentTransition(.symbolEffect(.replace))
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .tint(.white.opacity(0.25))
-                    }
-                    .font(.subheadline.weight(.semibold))
+        VStack(spacing: 0) {
+            header
+            ScrollView {
+                VStack(alignment: .leading, spacing: Theme.sectionSpacing) {
+                    codeBlock
+                    players
                 }
-
-                matchInfo
-                players
-                Spacer(minLength: 0)
-                footer
+                .padding(.horizontal, Theme.gutter)
+                .padding(.top, 8)
+                .padding(.bottom, 24)
             }
-            .padding()
-            .foregroundStyle(.white)
+            footer
         }
+        .background(Theme.background)
         .sensoryFeedback(.impact(weight: .light), trigger: session.snapshot.participants.count) { _, _ in app.hapticsEnabled }
         .alert("Add guest", isPresented: $showGuestPrompt) {
             TextField("Name", text: $guestName)
@@ -156,15 +132,12 @@ struct LobbyView: View {
         HStack {
             Button { app.presentation = nil } label: {
                 Image(systemName: "chevron.down")
-                    .font(.headline)
-                    .frame(width: 40, height: 40)
-                    .background(.white.opacity(0.2), in: Circle())
             }
+            .buttonStyle(CircleIconButtonStyle(size: 36))
             Spacer()
-            if app.isOnline {
-                Label("Online", systemImage: "wifi").font(.caption.weight(.bold))
-            } else {
-                Label("Demo · simulated friends", systemImage: "sparkles").font(.caption.weight(.bold))
+            HStack(spacing: 6) {
+                Circle().fill(app.isOnline ? Theme.fairway : Color.secondary.opacity(0.5)).frame(width: 6, height: 6)
+                Text(app.isOnline ? "Online" : "Demo · simulated friends").font(.footnote).foregroundStyle(.secondary)
             }
             Spacer()
             Menu {
@@ -178,104 +151,116 @@ struct LobbyView: View {
                 }
             } label: {
                 Image(systemName: "ellipsis")
-                    .font(.headline)
-                    .frame(width: 40, height: 40)
-                    .background(.white.opacity(0.2), in: Circle())
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .frame(width: 36, height: 36)
+                    .overlay(Circle().strokeBorder(Theme.outline, lineWidth: 1))
+            }
+        }
+        .padding(.horizontal, Theme.gutter)
+        .padding(.vertical, 8)
+    }
+
+    private var codeBlock: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 6) {
+                Eyebrow("Match lobby")
+                Text(session.match.name).font(.display(30)).lineLimit(2)
+                Text(matchDetails).font(.subheadline).foregroundStyle(.secondary)
+            }
+            VStack(alignment: .leading, spacing: 10) {
+                Eyebrow("Room code")
+                CodeTiles(code: session.match.code, tileSize: 62)
+            }
+            .padding(.top, 6)
+            HStack(spacing: 10) {
+                ShareLink(item: session.shareMessage) {
+                    Label("Invite", systemImage: "square.and.arrow.up")
+                }
+                .buttonStyle(SecondaryButtonStyle(height: 44))
+                Button {
+                    UIPasteboard.general.string = session.match.code
+                    copied = true
+                } label: {
+                    Label(copied ? "Copied" : "Copy code", systemImage: copied ? "checkmark" : "doc.on.doc")
+                        .contentTransition(.symbolEffect(.replace))
+                }
+                .buttonStyle(SecondaryButtonStyle(height: 44))
+                .sensoryFeedback(.success, trigger: copied)
             }
         }
     }
 
-    private var matchInfo: some View {
-        HStack(spacing: 10) {
-            InfoPill(text: session.match.course.name, systemImage: session.match.course.gameType.symbolName, tint: .white)
-            InfoPill(text: session.match.format.displayName, systemImage: session.match.format.symbolName, tint: .white)
-            if session.match.useHandicaps { InfoPill(text: "Net", systemImage: "plusminus", tint: .white) }
-        }
-        .lineLimit(1)
+    private var matchDetails: String {
+        var parts = [session.match.course.name, session.match.format.displayName]
+        if session.match.useHandicaps { parts.append("Net") }
+        return parts.joined(separator: " · ")
     }
 
     private var players: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text("Players").font(.headline)
-                Text("\(session.snapshot.participants.count)")
-                    .font(.headline)
-                    .contentTransition(.numericText(value: Double(session.snapshot.participants.count)))
-                Spacer()
-                Button {
-                    showGuestPrompt = true
-                } label: {
-                    Label("Guest", systemImage: "person.badge.plus").font(.subheadline.weight(.semibold))
-                }
-            }
-            ScrollView {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 92), spacing: 12)], spacing: 14) {
-                    ForEach(session.snapshot.participants) { player in
-                        VStack(spacing: 6) {
-                            AvatarView(avatar: player.avatar, size: 58, showsRing: player.id == session.myID)
-                                .overlay(alignment: .topTrailing) {
-                                    if player.id == session.match.hostID {
-                                        Image(systemName: "crown.fill")
-                                            .font(.caption)
-                                            .foregroundStyle(Theme.gold)
-                                            .offset(x: 4, y: -4)
-                                    }
-                                }
-                            Text(player.id == session.myID ? "You" : player.name)
-                                .font(.subheadline.weight(.semibold))
-                                .lineLimit(1)
-                            if player.isGuest {
-                                Text("Guest").font(.caption2).opacity(0.75)
-                            } else if let index = player.handicapIndex {
-                                Text("HCP \(HandicapCalculator.format(index))").font(.caption2).opacity(0.75)
-                            }
-                        }
-                        .transition(.scale(scale: 0.3).combined(with: .opacity))
+        VStack(alignment: .leading, spacing: 4) {
+            SectionHeader(title: "Players · \(session.snapshot.participants.count)", actionTitle: "Add guest") { showGuestPrompt = true }
+            DividedList(session.snapshot.participants, inset: 50) { player in
+                HStack(spacing: 14) {
+                    AvatarView(avatar: player.avatar, size: 36, showsRing: player.id == session.myID)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(player.id == session.myID ? "\(player.name) (you)" : player.name)
+                            .font(.body.weight(.medium))
+                            .lineLimit(1)
+                        Text(playerDetail(player)).font(.footnote).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    if player.id == session.match.hostID {
+                        Eyebrow("Host", color: Theme.gold)
                     }
                 }
-                .padding(.vertical, 6)
+                .padding(.vertical, 10)
+                .transition(.asymmetric(insertion: .move(edge: .bottom).combined(with: .opacity), removal: .opacity))
             }
-            .frame(maxHeight: 260)
+            .animation(.snappySpring, value: session.snapshot.participants.map(\.id))
         }
-        .padding(16)
-        .background(.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .animation(.playful, value: session.snapshot.participants.map(\.id))
+    }
+
+    private func playerDetail(_ player: Participant) -> String {
+        if player.isGuest { return "Guest" }
+        if let index = player.handicapIndex { return "Handicap \(HandicapCalculator.format(index))" }
+        return "No handicap yet"
     }
 
     @ViewBuilder
     private var footer: some View {
-        if session.isHost {
-            Button {
-                Task {
-                    isStarting = true
-                    defer { isStarting = false }
-                    do { try await session.start() } catch { app.showError(error) }
+        Group {
+            if session.isHost {
+                Button {
+                    Task {
+                        isStarting = true
+                        defer { isStarting = false }
+                        do { try await session.start() } catch { app.showError(error) }
+                    }
+                } label: {
+                    HStack {
+                        if isStarting { ProgressView().tint(Theme.onAccent) }
+                        Text("Tee off")
+                        Image(systemName: "arrow.right")
+                    }
                 }
-            } label: {
-                HStack {
-                    if isStarting { ProgressView().tint(Theme.deepGreen) }
-                    Text("Tee off").font(.headline)
-                    Image(systemName: "figure.golf")
+                .buttonStyle(PrimaryButtonStyle())
+                .disabled(isStarting)
+            } else {
+                HStack(spacing: 10) {
+                    ProgressView()
+                    Text("Waiting for the host to tee off").font(.subheadline.weight(.medium))
                 }
-                .foregroundStyle(Theme.deepGreen)
                 .frame(maxWidth: .infinity)
-                .frame(height: 56)
-                .background(.white, in: Capsule())
+                .frame(height: 52)
+                .phaseAnimator([0.55, 1.0]) { view, opacity in
+                    view.opacity(opacity)
+                } animation: { _ in .easeInOut(duration: 1.1) }
             }
-            .buttonStyle(PressableStyle())
-            .disabled(isStarting)
-        } else {
-            HStack(spacing: 10) {
-                ProgressView().tint(.white)
-                Text("Waiting for the host to tee off…").font(.headline)
-            }
-            .frame(maxWidth: .infinity)
-            .frame(height: 56)
-            .background(.white.opacity(0.15), in: Capsule())
-            .phaseAnimator([0.6, 1.0]) { view, opacity in
-                view.opacity(opacity)
-            } animation: { _ in .easeInOut(duration: 1.1) }
         }
+        .padding(.horizontal, Theme.gutter)
+        .padding(.vertical, 10)
+        .overlay(alignment: .top) { Hairline() }
     }
 }
 
@@ -295,30 +280,27 @@ struct MatchLeaderboardSheet: View {
 
     var body: some View {
         NavigationStack {
-            List {
-                Section {
-                    ForEach(session.leaderboard) { entry in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 4) {
+                    SectionHeader(title: session.match.format.displayName, subtitle: syncStatus) {
+                        LiveBadge()
+                    }
+                    DividedList(session.leaderboard, inset: 46) { entry in
                         Button { selected = entry.participant } label: {
                             LeaderboardRow(entry: entry, isMe: entry.id == session.myID, totalHoles: session.match.holeNumbers.count)
                         }
-                        .foregroundStyle(.primary)
+                        .buttonStyle(PressableStyle())
                     }
-                } header: {
-                    HStack {
-                        Text(session.match.format.displayName)
-                        Spacer()
-                        LiveBadge()
-                    }
-                } footer: {
-                    Text(syncStatus)
                 }
+                .padding(.horizontal, Theme.gutter)
+                .animation(.snappySpring, value: session.leaderboard.map(\.id))
             }
-            .animation(.snappySpring, value: session.leaderboard.map(\.id))
+            .background(Theme.background)
             .navigationTitle(session.match.name)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button { showMap = true } label: { Image(systemName: "map.fill") }
+                    Button { showMap = true } label: { Image(systemName: "map") }
                 }
             }
             .refreshable { await session.refresh() }
@@ -342,28 +324,30 @@ struct LeaderboardRow: View {
     var body: some View {
         HStack(spacing: 12) {
             Text(entry.positionLabel)
-                .font(.headline.monospacedDigit())
-                .frame(width: 34)
+                .font(.figure(15, weight: .semibold))
+                .frame(width: 30, alignment: .leading)
                 .foregroundStyle(entry.position == 1 && entry.thru > 0 ? Theme.gold : .secondary)
-            AvatarView(avatar: entry.participant.avatar, size: 36, showsRing: isMe)
+            AvatarView(avatar: entry.participant.avatar, size: 34, showsRing: isMe)
             VStack(alignment: .leading, spacing: 2) {
                 Text(isMe ? "\(entry.participant.name) (you)" : entry.participant.name)
-                    .font(.subheadline.weight(.semibold))
-                Text(progress).font(.caption).foregroundStyle(.secondary)
+                    .font(.body.weight(.medium))
+                Text(progress).font(.footnote).foregroundStyle(.secondary).monospacedDigit()
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 2) {
                 Text(entry.statusText)
-                    .font(.headline)
+                    .font(.figure(18, weight: .semibold))
                     .foregroundStyle(entry.grossToPar < 0 ? Theme.flag : .primary)
                     .contentTransition(.numericText())
                 if let net = entry.netToPar, entry.courseHandicap != nil {
                     Text("Gross \(Leaderboard.formatToPar(entry.grossToPar)) · Net \(Leaderboard.formatToPar(net))")
-                        .font(.caption2).foregroundStyle(.secondary)
+                        .font(.caption2).foregroundStyle(.secondary).monospacedDigit()
                 }
             }
         }
-        .padding(.vertical, 2)
+        .foregroundStyle(.primary)
+        .padding(.vertical, 11)
+        .contentShape(Rectangle())
     }
 
     private var progress: String {
@@ -383,13 +367,13 @@ struct ParticipantScorecardView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: Theme.sectionSpacing) {
                     HStack(spacing: 14) {
-                        AvatarView(avatar: participant.avatar, size: 60)
+                        AvatarView(avatar: participant.avatar, size: 56)
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(participant.name).font(.title2.weight(.bold))
+                            Text(participant.name).font(.display(26))
                             if let hole = participant.currentHole {
-                                Label("On hole \(hole)", systemImage: "flag.fill").font(.subheadline).foregroundStyle(.secondary)
+                                Label("On hole \(hole)", systemImage: "flag").font(.subheadline).foregroundStyle(.secondary)
                             }
                         }
                     }
@@ -397,7 +381,8 @@ struct ParticipantScorecardView: View {
                                   players: [ScorecardPlayerRow(participant: participant)], units: app.units)
                     RoundReport(round: participant.round(in: match))
                 }
-                .padding()
+                .padding(.horizontal, Theme.gutter)
+                .padding(.vertical, 12)
             }
             .background(Theme.background)
             .navigationBarTitleDisplayMode(.inline)

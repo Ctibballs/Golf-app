@@ -11,16 +11,17 @@ struct ProfileView: View {
                 Section {
                     Button { editing = true } label: {
                         HStack(spacing: 16) {
-                            AvatarView(avatar: app.profile.avatar, size: 64)
+                            AvatarView(avatar: app.profile.avatar, size: 60)
                             VStack(alignment: .leading, spacing: 4) {
-                                Text(app.profile.name).font(.title2.weight(.bold))
+                                Text(app.profile.name).font(.display(26))
                                 Text("\(app.library.completedRounds.count) rounds · \(app.library.matchHistory.count) matches")
                                     .font(.subheadline)
                                     .foregroundStyle(.secondary)
                             }
                             Spacer()
-                            Image(systemName: "pencil.circle.fill").font(.title2).foregroundStyle(Theme.fairway)
+                            Text("Edit").font(.subheadline.weight(.medium)).foregroundStyle(Theme.fairway)
                         }
+                        .padding(.vertical, 8)
                     }
                     .foregroundStyle(.primary)
                 }
@@ -34,11 +35,11 @@ struct ProfileView: View {
                             HStack {
                                 Label(type.displayName, systemImage: type.symbolName)
                                 Spacer()
-                                Text(result.displayIndex)
-                                    .font(.headline.monospacedDigit())
                                 if result.index == nil {
                                     Text("\(result.roundsUntilEstablished) to go").font(.caption).foregroundStyle(.secondary)
                                 }
+                                Text(result.displayIndex)
+                                    .font(.figure(17, weight: .semibold))
                             }
                         }
                     }
@@ -70,6 +71,7 @@ struct ProfileView: View {
                     }
                 }
             }
+            .flatList()
             .navigationTitle("Profile")
             .navigationDestination(for: Round.self) { RoundDetailView(roundID: $0.id) }
             .sheet(isPresented: $editing) { EditProfileView() }
@@ -85,15 +87,15 @@ struct EditProfileView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            List {
                 Section {
                     HStack {
                         Spacer()
-                        AvatarView(avatar: avatar, size: 96, showsRing: true)
-                            .animation(.playful, value: avatar)
+                        AvatarView(avatar: avatar, size: 96)
+                            .animation(.snappySpring, value: avatar)
                         Spacer()
                     }
-                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
                 }
                 Section("Name") {
                     TextField("Name", text: $name)
@@ -104,7 +106,7 @@ struct EditProfileView: View {
                             Text(emoji)
                                 .font(.title2)
                                 .frame(width: 36, height: 36)
-                                .background(avatar.emoji == emoji ? Theme.fairway.opacity(0.25) : .clear, in: Circle())
+                                .overlay(Circle().strokeBorder(avatar.emoji == emoji ? Theme.fairway : .clear, lineWidth: 1.5))
                                 .onTapGesture { avatar.emoji = emoji }
                         }
                     }
@@ -113,12 +115,14 @@ struct EditProfileView: View {
                             Circle()
                                 .fill(Theme.avatarColor(index))
                                 .frame(width: 28, height: 28)
-                                .overlay(Circle().strokeBorder(.primary, lineWidth: avatar.colorIndex == index ? 2.5 : 0))
+                                .padding(3)
+                                .overlay(Circle().strokeBorder(Color.primary, lineWidth: avatar.colorIndex == index ? 1.5 : 0))
                                 .onTapGesture { avatar.colorIndex = index }
                         }
                     }
                 }
             }
+            .flatList()
             .navigationTitle("Edit profile")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -158,7 +162,7 @@ struct RoundHistoryView: View {
                     ForEach(GameType.allCases) { Text($0.displayName).tag(GameType?.some($0)) }
                 }
                 .pickerStyle(.segmented)
-                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
             }
             ForEach(rounds) { round in
                 NavigationLink(value: round) {
@@ -169,8 +173,8 @@ struct RoundHistoryView: View {
                                 .font(.caption).foregroundStyle(.secondary)
                         }
                         Spacer()
-                        Text("\(round.totalStrokes)").font(.headline)
-                        ToParText(toPar: round.toPar, font: .caption.weight(.bold)).frame(width: 34, alignment: .trailing)
+                        Text("\(round.totalStrokes)").font(.figure(17, weight: .semibold))
+                        ToParText(toPar: round.toPar, font: .footnote.weight(.medium)).frame(width: 34, alignment: .trailing)
                     }
                 }
                 .swipeActions {
@@ -178,6 +182,7 @@ struct RoundHistoryView: View {
                 }
             }
         }
+        .flatList()
         .navigationTitle("Round history")
         .overlay {
             if rounds.isEmpty {
@@ -216,6 +221,7 @@ struct CustomCoursesView: View {
                 }
             }
         }
+        .flatList()
         .navigationTitle("My courses")
         .toolbar {
             Button { showEditor = true } label: { Image(systemName: "plus") }
