@@ -59,6 +59,9 @@ public struct Match: Codable, Hashable, Identifiable, Sendable {
     public var finishedAt: Date?
     public var tournamentID: UUID?
     public var roundNumber: Int?
+    /// Set for team games: how each team's score is made up.
+    public var teamFormat: TeamFormat?
+    public var teams: [Team]
 
     public init(
         id: UUID = UUID(),
@@ -75,7 +78,9 @@ public struct Match: Codable, Hashable, Identifiable, Sendable {
         startedAt: Date? = nil,
         finishedAt: Date? = nil,
         tournamentID: UUID? = nil,
-        roundNumber: Int? = nil
+        roundNumber: Int? = nil,
+        teamFormat: TeamFormat? = nil,
+        teams: [Team] = []
     ) {
         self.id = id
         self.code = code
@@ -92,9 +97,48 @@ public struct Match: Codable, Hashable, Identifiable, Sendable {
         self.finishedAt = finishedAt
         self.tournamentID = tournamentID
         self.roundNumber = roundNumber
+        self.teamFormat = teamFormat
+        self.teams = teams
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, code, hostID, name, course, tee, holeNumbers, format, useHandicaps, status
+        case createdAt, startedAt, finishedAt, tournamentID, roundNumber, teamFormat, teams
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        code = try c.decode(String.self, forKey: .code)
+        hostID = try c.decode(UUID.self, forKey: .hostID)
+        name = try c.decode(String.self, forKey: .name)
+        course = try c.decode(Course.self, forKey: .course)
+        tee = try c.decodeIfPresent(TeeSet.self, forKey: .tee)
+        holeNumbers = try c.decode([Int].self, forKey: .holeNumbers)
+        format = try c.decode(ScoringFormat.self, forKey: .format)
+        useHandicaps = try c.decode(Bool.self, forKey: .useHandicaps)
+        status = try c.decode(MatchStatus.self, forKey: .status)
+        createdAt = try c.decode(Date.self, forKey: .createdAt)
+        startedAt = try c.decodeIfPresent(Date.self, forKey: .startedAt)
+        finishedAt = try c.decodeIfPresent(Date.self, forKey: .finishedAt)
+        tournamentID = try c.decodeIfPresent(UUID.self, forKey: .tournamentID)
+        roundNumber = try c.decodeIfPresent(Int.self, forKey: .roundNumber)
+        // Matches saved before team play existed are individual games.
+        teamFormat = try c.decodeIfPresent(TeamFormat.self, forKey: .teamFormat)
+        teams = try c.decodeIfPresent([Team].self, forKey: .teams) ?? []
     }
 
     public var holes: [HoleInfo] { holeNumbers.compactMap { course.hole($0) } }
+
+    /// A team game needs a team format and at least two teams.
+    public var isTeamGame: Bool { teamFormat != nil && teams.count >= 2 }
+
+    /// Scramble and foursomes: one ball, so one team score per hole.
+    public var isOneBallTeamGame: Bool { isTeamGame && teamFormat?.isOneBall == true }
+
+    public func team(of playerID: UUID) -> Team? {
+        teams.first { $0.memberIDs.contains(playerID) }
+    }
     public var totalPar: Int { course.par(for: holeNumbers) }
 }
 
@@ -176,7 +220,10 @@ public struct Participant: Codable, Hashable, Identifiable, Sendable {
             isComplete: ordered.count == match.holeNumbers.count,
             handicapIndex: handicapIndex,
             matchID: match.id,
-            tournamentID: match.tournamentID
+            tournamentID: match.tournamentID,
+            // Team formats aren't acceptable for handicap purposes under WHS.
+            countsForHandicap: !match.isTeamGame,
+            teamFormat: match.isTeamGame ? match.teamFormat : nil
         )
     }
 }

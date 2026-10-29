@@ -180,6 +180,30 @@ public enum DemoData {
             rounds.append(participants[0].round(in: match))
         }
 
+        // A four-ball team match: you and Riley against Alex and Sam.
+        do {
+            let date = now.addingTimeInterval(-16 * day + 10 * 3600)
+            let blue = [me, friends[3]], red = [friends[0], friends[1]]
+            let match = Match(
+                code: "DEMO", hostID: profile.id, name: "Fourball Friday", course: golfCourse, tee: golfTee,
+                format: .strokePlay, useHandicaps: true, status: .finished, createdAt: date, startedAt: date,
+                finishedAt: date.addingTimeInterval(4 * 3600), teamFormat: .fourBall,
+                teams: [
+                    Team(name: "Blue", colorIndex: 0, memberIDs: blue.map(\.id)),
+                    Team(name: "Red", colorIndex: 1, memberIDs: red.map(\.id)),
+                ]
+            )
+            let participants = (blue + red).map { p -> Participant in
+                var copy = p
+                copy.scores = play(p, course: golfCourse, holes: match.holeNumbers, tee: golfTee, date: date, salt: 500)
+                copy.isFinished = true
+                copy.currentHole = nil
+                return copy
+            }
+            matches.append(MatchRecord(snapshot: MatchSnapshot(match: match, participants: participants), savedAt: date.addingTimeInterval(4 * 3600)))
+            rounds.append(participants[0].round(in: match))
+        }
+
         // Tournaments with a spread of finishes, so the trophy cabinet has a bit of everything.
         let events: [SampleTournament] = [
             SampleTournament(name: "Spring Classic", course: golfCourse, tee: golfTee, format: .strokePlay, useHandicaps: true,
@@ -266,20 +290,28 @@ public enum DemoData {
             return TournamentSnapshot(tournament: tournament, entrants: entrants, rounds: rounds)
         }
 
-        // Separate any bots tied with each other, so every finishing position is reachable.
-        for step in 0..<60 {
+        // Rank key for a standing, lower is better (the same rule the standings use).
+        func key(_ s: TournamentStanding) -> Int {
+            if event.format == .stableford { return -(s.points ?? 0) }
+            return event.useHandicaps ? (s.totalNetToPar ?? s.totalToPar) : s.totalToPar
+        }
+
+        // Space the bots at least two strokes apart so the player can finish outright in
+        // any position, rather than tied.
+        for step in 0..<120 {
             let others = TournamentStandings.compute(snapshot()).filter { $0.entrant.id != me.id }
-            guard let tied = others.first(where: { a in others.contains { $0.entrant.id != a.entrant.id && $0.position == a.position } }),
-                  let index = players.firstIndex(where: { $0.id == tied.entrant.id }) else { break }
+            guard let crowded = others.indices.dropFirst().first(where: { key(others[$0]) - key(others[$0 - 1]) < 2 }),
+                  let index = players.firstIndex(where: { $0.id == others[crowded].entrant.id }) else { break }
             let round = step % cards.count
             cards[round][index] = nudged(cards[round][index], course: event.course, better: false)
         }
-        // Then move the player a stroke at a time until they land in the right place.
-        for step in 0..<160 {
-            guard let position = TournamentStandings.compute(snapshot()).first(where: { $0.entrant.id == me.id })?.position,
-                  position != event.finish else { break }
+        // Then move the player a stroke at a time until they land in the right place, alone.
+        for step in 0..<200 {
+            guard let mine = TournamentStandings.compute(snapshot()).first(where: { $0.entrant.id == me.id }) else { break }
+            let tied = mine.positionLabel.hasPrefix("T")
+            if mine.position == event.finish && !tied { break }
             let round = step % cards.count
-            cards[round][0] = nudged(cards[round][0], course: event.course, better: position > event.finish)
+            cards[round][0] = nudged(cards[round][0], course: event.course, better: mine.position > event.finish || (mine.position == event.finish && tied))
         }
         return (snapshot(), matches.enumerated().map { n, match in cards[n][0].round(in: match) })
     }

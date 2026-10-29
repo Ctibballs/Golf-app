@@ -70,7 +70,8 @@ public enum HeadToHeadEngine {
     public static func records(for me: UUID, in history: [MatchRecord]) -> [HeadToHeadRecord] {
         var byOpponent: [UUID: HeadToHeadRecord] = [:]
 
-        for record in history.sorted(by: { $0.snapshot.match.createdAt > $1.snapshot.match.createdAt }) {
+        // In scramble and foursomes each card holds a team score, not the player's own.
+        for record in history.sorted(by: { $0.snapshot.match.createdAt > $1.snapshot.match.createdAt }) where !record.snapshot.match.isOneBallTeamGame {
             let snapshot = record.snapshot
             let match = snapshot.match
             guard let mine = snapshot.participant(me) else { continue }
@@ -118,7 +119,7 @@ public enum HeadToHeadEngine {
     /// Everyone you've played with, ranked by average score to par per 18 holes.
     public static func friendsLeaderboard(for me: UUID, in history: [MatchRecord], gameType: GameType? = nil) -> [FriendStanding] {
         var standings: [UUID: FriendStanding] = [:]
-        for record in history {
+        for record in history where !record.snapshot.match.isOneBallTeamGame {
             let match = record.snapshot.match
             if let gameType, match.course.gameType != gameType { continue }
             for participant in record.snapshot.participants {

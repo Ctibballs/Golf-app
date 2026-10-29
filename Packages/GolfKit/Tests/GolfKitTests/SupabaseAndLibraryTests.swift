@@ -211,7 +211,10 @@ final class DemoAndLibraryTests: XCTestCase {
         let profile = PlayerProfile(name: "Chris")
         let history = DemoData.sampleHistory(for: profile, now: Date(timeIntervalSince1970: 1_800_000_000))
         XCTAssertGreaterThan(history.rounds.count, 10)
-        XCTAssertEqual(history.matches.count, 6)
+        XCTAssertEqual(history.matches.count, 7)
+        let fourball = history.matches.first { $0.snapshot.match.isTeamGame }
+        XCTAssertEqual(TeamLeaderboard.entries(for: fourball!.snapshot).count, 2, "the sample four-ball has two teams")
+        XCTAssertFalse(history.rounds.first { $0.matchID == fourball?.id }?.countsForHandicap ?? true, "team rounds stay out of the handicap")
         XCTAssertEqual(history.tournaments.count, 4)
 
         // Sample tournaments finish where they're meant to: a win, a second, a third, a fourth.
@@ -219,6 +222,7 @@ final class DemoAndLibraryTests: XCTestCase {
         XCTAssertEqual(cabinet.eventsEntered, 4)
         XCTAssertEqual(cabinet.titles, 1)
         XCTAssertEqual(cabinet.entries.compactMap(\.position).sorted(), [1, 2, 3, 4])
+        XCTAssertFalse(cabinet.entries.contains { $0.positionLabel.hasPrefix("T") }, "sample finishes are outright, not tied")
 
         var library = GolfLibrary(profile: profile, rounds: history.rounds, matchHistory: history.matches, tournaments: history.tournaments, hasSampleData: true)
         let golf = library.handicap(for: .golf)

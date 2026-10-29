@@ -44,6 +44,15 @@ struct CompeteView: View {
                     }
                     tournamentsSection.reveal(1)
                     pastMatchesSection
+                    VStack(alignment: .leading, spacing: 4) {
+                        SectionHeader(title: "How to play")
+                        NavigationLink {
+                            RulesView()
+                        } label: {
+                            NavigationRowLabel(title: "Formats and rules", subtitle: "Stroke play, match play, Stableford, skins, four-ball, scramble, foursomes and more", systemImage: "book")
+                        }
+                        .buttonStyle(PressableStyle())
+                    }
                 }
                 .padding(.horizontal, Theme.gutter)
                 .padding(.bottom, 32)

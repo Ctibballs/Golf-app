@@ -211,7 +211,7 @@ public enum StatsEngine {
     public static func playerStats(rounds: [Round], gameType: GameType? = nil) -> PlayerStats {
         let relevant = rounds
             .filter { gameType == nil || $0.gameType == gameType }
-            .filter { $0.holesPlayed > 0 }
+            .filter { $0.holesPlayed > 0 && !$0.isTeamBallRound }
             .sorted { $0.date < $1.date }
 
         var scoring = ScoringStats()
@@ -255,7 +255,7 @@ public enum StatsEngine {
 
     /// Per-course and per-hole stats.
     public static func courseStats(rounds: [Round]) -> [CourseStats] {
-        let grouped = Dictionary(grouping: rounds.filter { $0.holesPlayed > 0 }, by: { $0.course.id })
+        let grouped = Dictionary(grouping: rounds.filter { $0.holesPlayed > 0 && !$0.isTeamBallRound }, by: { $0.course.id })
         return grouped.values.compactMap { courseRounds -> CourseStats? in
             guard let latest = courseRounds.max(by: { $0.date < $1.date }) else { return nil }
             let course = latest.course

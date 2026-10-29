@@ -17,6 +17,10 @@ struct RoundSetupView: View {
     @State private var format: ScoringFormat = .strokePlay
     @State private var useHandicaps = true
     @State private var matchName = ""
+    @State private var playInTeams = false
+    @State private var teamFormat: TeamFormat = .fourBall
+    @State private var teamCount = 2
+    @State private var rulesShown: FormatRules?
     @State private var isCreating = false
     @State private var didSetUp = false
 
@@ -110,10 +114,28 @@ struct RoundSetupView: View {
             SectionHeader(title: "Match")
             UnderlineField(title: "Name", text: $matchName)
                 .padding(.vertical, 10)
-            DividedList(ScoringFormat.allCases, inset: 38) { option in
+            DividedList(availableFormats, inset: 38) { option in
                 RadioRow(title: option.displayName, subtitle: option.summary, systemImage: option.symbolName, isSelected: format == option) {
                     format = option
                 }
+                .contextMenu {
+                    Button("How \(option.displayName) works", systemImage: "book") { rulesShown = FormatRules.rules(for: option) }
+                }
+            }
+            Hairline()
+            Toggle(isOn: $playInTeams.animation(.snappySpring)) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Play in teams").font(.body.weight(.medium))
+                    Text("Four-ball, best ball, scramble, foursomes and Chapman").font(.footnote).foregroundStyle(.secondary)
+                }
+            }
+            .tint(Theme.fairway)
+            .padding(.vertical, 12)
+            .onChange(of: playInTeams) { _, teams in
+                if teams && format == .skins { format = .strokePlay }
+            }
+            if playInTeams {
+                teamOptions
             }
             Hairline()
             Toggle(isOn: $useHandicaps) {
@@ -135,8 +157,58 @@ struct RoundSetupView: View {
                     .foregroundStyle(.secondary)
                     .padding(.top, 4)
             }
+            Hairline().padding(.top, 8)
+            NavigationLink {
+                RulesView()
+            } label: {
+                NavigationRowLabel(title: "How each format works", subtitle: "Rules, scoring and handicap allowances", systemImage: "book")
+            }
+            .buttonStyle(PressableStyle())
         }
         .transition(.opacity.combined(with: .move(edge: .top)))
+        .sheet(item: $rulesShown) { RuleSheet(rule: $0) }
+    }
+
+    /// Skins is an individual game, so it's left out when playing in teams.
+    private var availableFormats: [ScoringFormat] {
+        playInTeams ? ScoringFormat.allCases.filter { $0 != .skins } : ScoringFormat.allCases
+    }
+
+    private var teamOptions: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Eyebrow("Team format").padding(.top, 4).padding(.bottom, 2)
+            DividedList(TeamFormat.allCases, inset: 38) { option in
+                RadioRow(title: option.displayName, subtitle: option.summary, systemImage: option.symbolName, isSelected: teamFormat == option) {
+                    teamFormat = option
+                    if format != .matchPlay { teamCount = option.usualTeamSize == 2 ? 2 : teamCount }
+                }
+                .contextMenu {
+                    Button("How \(option.displayName) works", systemImage: "book") { rulesShown = FormatRules.rules(for: option) }
+                }
+            }
+            Hairline()
+            Stepper(value: $teamCount, in: 2...(format == .matchPlay ? 2 : 4)) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("\(teamCount) teams").font(.body.weight(.medium)).monospacedDigit()
+                    Text(format == .matchPlay ? "Match play is one side against the other." : "Pick who's on which team in the lobby, or let Fairway balance them by handicap.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+            }
+            .padding(.vertical, 12)
+            .onChange(of: format) { _, newFormat in
+                if newFormat == .matchPlay { teamCount = 2 }
+            }
+            Button {
+                rulesShown = FormatRules.rules(for: teamFormat)
+            } label: {
+                Label("How \(teamFormat.displayName) works", systemImage: "book")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(Theme.fairway)
+            }
+            .buttonStyle(PressableStyle())
+            .padding(.bottom, 8)
+        }
+        .transition(.opacity)
     }
 
     private func summary(_ course: Course) -> some View {
@@ -210,7 +282,8 @@ struct RoundSetupView: View {
             do {
                 let session = try await app.createMatch(
                     name: matchName.isEmpty ? course.name : matchName, course: course, tee: tee,
-                    holes: numbers, format: format, useHandicaps: useHandicaps
+                    holes: numbers, format: format, useHandicaps: useHandicaps,
+                    teamFormat: playInTeams ? teamFormat : nil, teamCount: format == .matchPlay ? 2 : teamCount
                 )
                 dismiss()
                 app.present(.match(session.id), afterDismissing: true)

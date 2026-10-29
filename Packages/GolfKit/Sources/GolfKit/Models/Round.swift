@@ -46,6 +46,8 @@ public struct Round: Codable, Hashable, Identifiable, Sendable {
     public var weatherSummary: String?
     /// Players can exclude casual rounds (scrambles, practice) from their handicap.
     public var countsForHandicap: Bool
+    /// Set when the round was played as part of a team game.
+    public var teamFormat: TeamFormat?
 
     public init(
         id: UUID = UUID(),
@@ -62,7 +64,8 @@ public struct Round: Codable, Hashable, Identifiable, Sendable {
         tournamentID: UUID? = nil,
         notes: String? = nil,
         weatherSummary: String? = nil,
-        countsForHandicap: Bool = true
+        countsForHandicap: Bool = true,
+        teamFormat: TeamFormat? = nil
     ) {
         self.id = id
         self.playerID = playerID
@@ -79,7 +82,11 @@ public struct Round: Codable, Hashable, Identifiable, Sendable {
         self.notes = notes
         self.weatherSummary = weatherSummary
         self.countsForHandicap = countsForHandicap
+        self.teamFormat = teamFormat
     }
+
+    /// Scramble and foursomes cards hold a team score, so they stay out of personal stats.
+    public var isTeamBallRound: Bool { teamFormat?.isOneBall == true }
 
     public var gameType: GameType { course.gameType }
 

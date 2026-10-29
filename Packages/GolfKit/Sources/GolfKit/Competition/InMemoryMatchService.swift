@@ -161,6 +161,24 @@ public actor InMemoryMatchService: MatchService {
             }.max() ?? 0
             let layout = layouts(match.course.id)
             for i in list.indices where list[i].isBot {
+                var handicap = list[i].handicapIndex
+                if match.isOneBallTeamGame, let team = match.team(of: list[i].id) {
+                    let members = list.filter { team.memberIDs.contains($0.id) }
+                    // One ball per team: a bot only keeps the card for an all-bot team, and only
+                    // its first member does. Everyone else just walks along with their team.
+                    if members.contains(where: { !$0.isBot }) || members.first(where: \.isBot)?.id != list[i].id {
+                        let progress = match.holeNumbers.filter { hole in members.contains { $0.score(for: hole) != nil } }.count
+                        let next = progress < match.holeNumbers.count ? match.holeNumbers[progress] : nil
+                        list[i].currentHole = next
+                        list[i].isFinished = next == nil
+                        continue
+                    }
+                    // The team ball plays better than any one of its players.
+                    let indexes = members.map { $0.handicapIndex ?? 18 }
+                    handicap = match.teamFormat == .scramble
+                        ? max(0, (indexes.min() ?? 18) - 4)
+                        : indexes.reduce(0, +) / Double(max(1, indexes.count))
+                }
                 let byTime = Int(time.timeIntervalSince(started) / secondsPerHole * jitter(list[i].id))
                 let target = min(match.holeNumbers.count, min(byTime, humanProgress + 1))
                 var completed = match.holeNumbers.filter { list[i].score(for: $0) != nil }.count
@@ -168,7 +186,7 @@ public actor InMemoryMatchService: MatchService {
                     let number = match.holeNumbers[completed]
                     if let hole = match.course.hole(number) {
                         let score = BotGolfer.holeScore(
-                            playerID: list[i].id, handicap: list[i].handicapIndex, hole: hole,
+                            playerID: list[i].id, handicap: handicap, hole: hole,
                             gameType: match.course.gameType, layout: layout?.hole(number),
                             salt: stableSalt(match.id),
                             startTime: started.addingTimeInterval(Double(completed) * secondsPerHole)

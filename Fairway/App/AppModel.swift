@@ -309,7 +309,10 @@ final class AppModel {
         var round = Round(
             playerID: profile.id, playerName: profile.name, course: match.course, tee: match.tee,
             holeNumbers: match.holeNumbers, handicapIndex: session.me?.handicapIndex,
-            matchID: match.id, tournamentID: match.tournamentID
+            matchID: match.id, tournamentID: match.tournamentID,
+            // Team formats aren't acceptable for handicap purposes under WHS.
+            countsForHandicap: !match.isTeamGame,
+            teamFormat: match.isTeamGame ? match.teamFormat : nil
         )
         if let me = session.me { round.scores = me.scores }
         update {
@@ -353,10 +356,19 @@ final class AppModel {
 
     // MARK: - Matches
 
-    func createMatch(name: String, course: Course, tee: TeeSet?, holes: [Int], format: ScoringFormat, useHandicaps: Bool) async throws -> MatchSession {
+    func createMatch(
+        name: String, course: Course, tee: TeeSet?, holes: [Int], format: ScoringFormat, useHandicaps: Bool,
+        teamFormat: TeamFormat? = nil, teamCount: Int = 2
+    ) async throws -> MatchSession {
+        var teams: [Team] = []
+        if teamFormat != nil {
+            teams = Team.defaults(count: teamCount)
+            teams[0].memberIDs = [profile.id]
+        }
         let match = Match(
             code: JoinCode.generate(), hostID: profile.id, name: name, course: course, tee: tee,
-            holeNumbers: holes, format: format, useHandicaps: useHandicaps
+            holeNumbers: holes, format: format, useHandicaps: useHandicaps,
+            teamFormat: teamFormat, teams: teams
         )
         let snapshot = try await matchService.createMatch(match, host: meAsParticipant(for: course.gameType))
         let session = register(snapshot)

@@ -76,7 +76,58 @@ final class LiveRoundController {
     /// Strokes received on the current hole, for showing handicap dots.
     func strokesReceived(_ player: Participant) -> Int {
         guard let session, session.match.useHandicaps else { return 0 }
-        return PlayingHandicap.strokeAllocation(for: player, in: session.match)[currentHole] ?? 0
+        if session.match.isTeamGame {
+            // Team games use reduced allowances; one-ball teams get strokes as a side.
+            let strokes = TeamHandicap.playerHandicaps(in: session.match, participants: session.snapshot.participants)[player.id] ?? 0
+            return HandicapCalculator.strokeAllocation(courseHandicap: strokes, holes: session.match.holes)[currentHole] ?? 0
+        }
+        return PlayingHandicap.allocations(in: session.match, participants: session.snapshot.participants)[player.id]?[currentHole] ?? 0
+    }
+
+    // MARK: - Teams
+
+    var teamFormat: TeamFormat? {
+        guard let match = session?.match, match.isTeamGame else { return nil }
+        return match.teamFormat
+    }
+
+    /// Teams with at least one card kept on this device.
+    var myTeams: [Team] {
+        guard let match = session?.match, match.isTeamGame else { return [] }
+        let here = Set(players.map(\.id))
+        return match.teams.filter { $0.memberIDs.contains(where: here.contains) }
+    }
+
+    func members(of team: Team) -> [Participant] {
+        team.memberIDs.compactMap { session?.snapshot.participant($0) }
+    }
+
+    /// The team's one ball on a hole (scramble and foursomes): the latest entry from any member.
+    func teamBallScore(_ team: Team, hole: Int? = nil) -> HoleScore? {
+        TeamLeaderboard.teamBallScore(for: hole ?? currentHole, members: members(of: team))
+    }
+
+    /// The team's counting score on the current hole, once enough members have scored.
+    func teamHoleScore(_ team: Team) -> Int? {
+        session?.teamLeaderboard.first { $0.id == team.id }?.holeScores[currentHole]
+    }
+
+    func teamStrokesReceived(_ team: Team) -> Int {
+        guard let session, session.match.useHandicaps else { return 0 }
+        let strokes = TeamHandicap.teamHandicaps(in: session.match, participants: session.snapshot.participants)[team.id] ?? 0
+        return HandicapCalculator.strokeAllocation(courseHandicap: strokes, holes: session.match.holes)[currentHole] ?? 0
+    }
+
+    /// Writes a one-ball team's score to a card this device keeps.
+    func adjustTeamStrokes(_ delta: Int, team: Team) {
+        guard let scorer = players.first(where: { team.memberIDs.contains($0.id) })?.id else { return }
+        let current = teamBallScore(team)
+        var score = self.score(for: scorer, hole: currentHole) ?? HoleScore(holeNumber: currentHole, strokes: par)
+        var strokes = max(1, (current?.strokes ?? par - delta) + delta)
+        if let cap = course.gameType.maxStrokesPerHole { strokes = min(cap, strokes) }
+        score.strokes = strokes
+        score.putts = current?.putts.map { min($0, max(0, strokes - 1)) } ?? score.putts.map { min($0, max(0, strokes - 1)) }
+        setScore(score, for: scorer)
     }
 
     // MARK: - Location

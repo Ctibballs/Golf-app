@@ -39,6 +39,18 @@ public enum PlayingHandicap {
         guard let ch = courseHandicap(for: participant, in: match) else { return [:] }
         return HandicapCalculator.strokeAllocation(courseHandicap: ch, holes: match.holes)
     }
+
+    /// Strokes on each hole for everyone in an individual match. In match play the lowest
+    /// handicap plays off scratch and the others receive the difference, on the hardest holes.
+    public static func allocations(in match: Match, participants: [Participant]) -> [UUID: [Int: Int]] {
+        let courseHandicaps = participants.compactMap { p in courseHandicap(for: p, in: match).map { (p.id, $0) } }
+        let offset = match.format == .matchPlay ? courseHandicaps.map(\.1).min() ?? 0 : 0
+        var result: [UUID: [Int: Int]] = [:]
+        for (id, ch) in courseHandicaps {
+            result[id] = HandicapCalculator.strokeAllocation(courseHandicap: ch - offset, holes: match.holes)
+        }
+        return result
+    }
 }
 
 public enum Leaderboard {
@@ -47,9 +59,7 @@ public enum Leaderboard {
         let players = snapshot.participants
         guard !players.isEmpty else { return [] }
 
-        let allocations = Dictionary(uniqueKeysWithValues: players.map {
-            ($0.id, PlayingHandicap.strokeAllocation(for: $0, in: match))
-        })
+        let allocations = PlayingHandicap.allocations(in: match, participants: players)
 
         func par(_ hole: Int) -> Int { match.course.hole(hole)?.par ?? 0 }
         func net(_ p: Participant, _ s: HoleScore) -> Int { s.strokes - (allocations[p.id]?[s.holeNumber] ?? 0) }

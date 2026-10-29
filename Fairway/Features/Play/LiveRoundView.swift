@@ -169,6 +169,10 @@ private struct LiveRoundContent: View {
         let round = controller.round
         let toPar = round.map { Leaderboard.formatToPar($0.toPar) } ?? "E"
         let thru = round?.holesPlayed ?? 0
+        if let session, session.match.isTeamGame, let team = session.myTeamPosition {
+            let place = team.thru > 0 ? "\(team.positionLabel) of \(session.teamLeaderboard.count) · \(team.statusText) thru \(team.thru)" : session.match.teamFormat?.displayName ?? "Teams"
+            return "\(team.team.name) team · \(place)"
+        }
         if let session, let position = session.myPosition, position.thru > 0 {
             return "\(position.positionLabel) of \(session.snapshot.participants.count) · \(toPar) thru \(thru)"
         }
@@ -262,9 +266,25 @@ private struct LiveRoundContent: View {
 
     private var scoring: some View {
         VStack(alignment: .leading, spacing: 0) {
-            SectionHeader(title: "Score", subtitle: session == nil ? nil : "Everyone in your group")
-            DividedList(controller.players, inset: 48) { player in
-                PlayerScoreRow(controller: controller, player: player, isMe: player.id == controller.myID)
+            if let format = controller.teamFormat, format.isOneBall {
+                SectionHeader(title: "Team score", subtitle: "\(format.displayName): one ball, so one score. Anyone in the team can enter it.")
+                DividedList(controller.myTeams, inset: 48) { team in
+                    TeamBallRow(controller: controller, team: team)
+                }
+            } else if let format = controller.teamFormat {
+                SectionHeader(title: "Score", subtitle: "\(format.displayName): \(format.summary.lowercased())")
+                ForEach(controller.myTeams) { team in
+                    TeamLabel(team: team, detail: controller.teamHoleScore(team).map { "Team score \($0)" })
+                        .padding(.top, 12)
+                    DividedList(controller.players.filter { team.memberIDs.contains($0.id) }, inset: 48) { player in
+                        PlayerScoreRow(controller: controller, player: player, isMe: player.id == controller.myID)
+                    }
+                }
+            } else {
+                SectionHeader(title: "Score", subtitle: session == nil ? nil : "Everyone in your group")
+                DividedList(controller.players, inset: 48) { player in
+                    PlayerScoreRow(controller: controller, player: player, isMe: player.id == controller.myID)
+                }
             }
             if session != nil {
                 Hairline()
@@ -284,6 +304,10 @@ private struct LiveRoundContent: View {
     // MARK: - Bottom bar
 
     private func leaderboardLabel(_ session: MatchSession) -> String {
+        if session.match.isTeamGame {
+            guard let team = session.myTeamPosition, team.thru > 0 else { return "Leaderboard" }
+            return "\(team.positionLabel) · \(team.statusText)"
+        }
         guard let position = session.myPosition, position.thru > 0 else { return "Leaderboard" }
         return "\(position.positionLabel) · \(position.statusText)"
     }
@@ -672,6 +696,62 @@ private struct PlayerScoreRow: View {
         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Theme.outline, lineWidth: 1))
         .animation(.easeOut(duration: 0.2), value: current)
+    }
+}
+
+// MARK: - Teams
+
+/// A team's single ball in scramble and foursomes, scored once for the whole team.
+private struct TeamBallRow: View {
+    @Environment(AppModel.self) private var app
+    @Bindable var controller: LiveRoundController
+    let team: Team
+
+    var body: some View {
+        let score = controller.teamBallScore(team)
+        let par = controller.par
+        let members = controller.members(of: team)
+        HStack(spacing: 12) {
+            TeamAvatars(team: team, members: members, size: 36)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text("\(team.name) team").font(.body.weight(.medium))
+                    let dots = controller.teamStrokesReceived(team)
+                    if dots > 0 {
+                        HStack(spacing: 2) {
+                            ForEach(0..<dots, id: \.self) { _ in Circle().fill(Theme.gold).frame(width: 5, height: 5) }
+                        }
+                    }
+                }
+                if let score {
+                    Text(score.scoreType(par: par).displayName)
+                        .font(.footnote.weight(.medium))
+                        .foregroundStyle(Theme.scoreColor(toPar: score.strokes - par))
+                        .contentTransition(.interpolate)
+                } else {
+                    Text(members.map(\.name).joined(separator: " & ")).font(.footnote).foregroundStyle(.secondary).lineLimit(1)
+                }
+            }
+            Spacer()
+            HStack(spacing: 12) {
+                Button { controller.adjustTeamStrokes(-1, team: team) } label: { Image(systemName: "minus") }
+                    .buttonStyle(CircleIconButtonStyle(size: 38))
+                ZStack {
+                    if let score {
+                        ScoreBadge(strokes: score.strokes, par: par, size: 42)
+                    } else {
+                        Text("–").font(.figure(24)).foregroundStyle(.tertiary)
+                    }
+                }
+                .frame(width: 46, height: 46)
+                .pulseRing(trigger: controller.celebrationTrigger, color: Theme.flag)
+                .animation(.snappySpring, value: score?.strokes)
+                Button { controller.adjustTeamStrokes(1, team: team) } label: { Image(systemName: "plus") }
+                    .buttonStyle(CircleIconButtonStyle(size: 38))
+            }
+        }
+        .padding(.vertical, 14)
+        .sensoryFeedback(.increase, trigger: score?.strokes ?? 0) { _, _ in app.hapticsEnabled }
     }
 }
 

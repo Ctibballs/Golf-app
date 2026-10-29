@@ -48,6 +48,8 @@ struct ProfileView: View {
                     Text("Handicap")
                 } footer: {
                     Text("Open a game to switch its handicap on or off, or to enter your official index.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                 }
 
                 Section("Trophies") {
@@ -76,6 +78,11 @@ struct ProfileView: View {
                         SettingsView()
                     } label: {
                         Label("Settings", systemImage: "gearshape")
+                    }
+                    NavigationLink {
+                        RulesView()
+                    } label: {
+                        Label("Formats and rules", systemImage: "book")
                     }
                     NavigationLink {
                         AboutView()

@@ -73,6 +73,17 @@ enum Theme {
         }
     }
 
+    /// Team colours, indexed by `Team.colorIndex` (Blue, Red, Green, Gold).
+    static func teamColor(_ index: Int) -> Color {
+        let colors = [
+            Color(light: 0x2F6AA8, dark: 0x6FA8E6),
+            Color(light: 0xC0392B, dark: 0xFF6A5E),
+            Color(light: 0x2E7D4F, dark: 0x5CC48A),
+            Color(light: 0xB07D12, dark: 0xE5B53E),
+        ]
+        return colors[((index % colors.count) + colors.count) % colors.count]
+    }
+
     /// A small identifying colour per game type, used for dots and icons only.
     static func tint(for type: GameType) -> Color {
         switch type {

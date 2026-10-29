@@ -18,6 +18,8 @@ final class MatchSession: Identifiable {
     @ObservationIgnored var onFinished: ((MatchSnapshot) -> Void)?
     @ObservationIgnored private var pollTask: Task<Void, Never>?
     @ObservationIgnored private var uploads: [UUID: Task<Void, Never>] = [:]
+    /// Team changes the server may not have seen yet.
+    @ObservationIgnored private var matchEditsInFlight = 0
 
     init(service: any MatchService, snapshot: MatchSnapshot, myID: UUID) {
         self.id = snapshot.match.id
@@ -39,6 +41,54 @@ final class MatchSession: Identifiable {
     }
 
     var myPosition: LeaderboardEntry? { leaderboard.first { $0.id == myID } }
+
+    // MARK: - Teams
+
+    var teamLeaderboard: [TeamLeaderboardEntry] { TeamLeaderboard.entries(for: snapshot) }
+    var myTeam: Team? { match.team(of: myID) }
+    var myTeamPosition: TeamLeaderboardEntry? {
+        guard let myTeam else { return nil }
+        return teamLeaderboard.first { $0.id == myTeam.id }
+    }
+
+    /// Players who joined but aren't on a team yet.
+    var unplacedPlayers: [Participant] {
+        guard match.isTeamGame else { return [] }
+        return snapshot.participants.filter { match.team(of: $0.id) == nil }
+    }
+
+    /// Host: moves a player onto another team.
+    func move(_ playerID: UUID, toTeam teamID: UUID) async {
+        await editTeams { TeamBuilder.moving(playerID, to: teamID, in: $0) }
+    }
+
+    /// Host: shares everyone out into sides of even strength.
+    func balanceTeams() async {
+        let players = snapshot.participants
+        await editTeams { TeamBuilder.balanced(players, into: $0) }
+    }
+
+    /// Host: puts newcomers on the smallest team as they join.
+    func placeNewPlayers() async {
+        guard !unplacedPlayers.isEmpty else { return }
+        let players = snapshot.participants
+        await editTeams { TeamBuilder.placingNewPlayers(players, in: $0) }
+    }
+
+    private func editTeams(_ change: ([Team]) -> [Team]) async {
+        guard isHost, match.isTeamGame else { return }
+        var updated = match
+        updated.teams = change(updated.teams)
+        guard updated.teams != match.teams else { return }
+        snapshot.match = updated
+        matchEditsInFlight += 1
+        defer { matchEditsInFlight -= 1 }
+        do {
+            try await service.updateMatch(updated)
+        } catch {
+            lastError = error.localizedDescription
+        }
+    }
 
     // MARK: - Sync
 
@@ -79,6 +129,8 @@ final class MatchSession: Identifiable {
                 merged.participants.append(local)
             }
         }
+        // Keep the host's team changes until the server has them.
+        if matchEditsInFlight > 0 { merged.match = snapshot.match }
         let wasFinished = snapshot.match.status == .finished
         snapshot = merged
         lastSynced = Date()
@@ -152,6 +204,15 @@ final class MatchSession: Identifiable {
         var m = match
         m.status = .live
         m.startedAt = Date()
+        if m.isTeamGame {
+            // Everyone who's here plays: place latecomers and drop anyone who left.
+            let present = Set(snapshot.participants.map(\.id))
+            m.teams = TeamBuilder.placingNewPlayers(snapshot.participants, in: m.teams).map { team in
+                var kept = team
+                kept.memberIDs = team.memberIDs.filter(present.contains)
+                return kept
+            }
+        }
         try await service.updateMatch(m)
         snapshot.match = m
         for p in scoredHere {

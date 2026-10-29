@@ -14,7 +14,10 @@ struct ResultsCardModel: Equatable {
     var tee: TeeSet?
     /// Rankings, best first. Empty for a solo round.
     var entries: [LeaderboardEntry]
-    /// Scorecard rows in ranking order.
+    /// Team rankings, best first, for team games.
+    var teamEntries: [TeamLeaderboardEntry] = []
+    var teamFormat: TeamFormat?
+    /// Scorecard rows in ranking order (teams first in team games).
     var rows: [ScorecardPlayerRow]
 
     init(snapshot: MatchSnapshot) {
@@ -31,6 +34,22 @@ struct ResultsCardModel: Equatable {
         self.tee = match.tee
         self.entries = entries
         self.rows = entries.map { ScorecardPlayerRow(participant: $0.participant) }
+        if match.isTeamGame, let format = match.teamFormat {
+            let teams = TeamLeaderboard.entries(for: snapshot)
+            self.teamEntries = teams
+            self.teamFormat = format
+            // Each team's card, then (when players have their own balls) its members' cards.
+            self.rows = teams.flatMap { team -> [ScorecardPlayerRow] in
+                var rows: [ScorecardPlayerRow] = []
+                if format.countingScores(teamSize: team.members.count) == 1 {
+                    rows.append(ScorecardPlayerRow(id: team.id, name: team.team.name, avatar: nil, scores: team.holeScores))
+                }
+                if !format.isOneBall {
+                    rows += team.members.map { ScorecardPlayerRow(participant: $0) }
+                }
+                return rows
+            }
+        }
     }
 
     init(round: Round, avatar: Avatar?) {
@@ -49,10 +68,28 @@ struct ResultsCardModel: Equatable {
 
     private var played: [LeaderboardEntry] { entries.filter { $0.thru > 0 } }
 
+    var isTeamGame: Bool { !teamEntries.isEmpty }
+
     /// A podium for the top three once there are at least four players.
-    var showsPodium: Bool { played.count >= 4 }
+    var showsPodium: Bool { !isTeamGame && played.count >= 4 }
+
+    /// The team in front, unless the lead is shared.
+    var leadingTeam: TeamLeaderboardEntry? {
+        let played = teamEntries.filter { $0.thru > 0 }
+        guard let first = played.first, !played.dropFirst().contains(where: { $0.position == first.position }) else { return nil }
+        return first
+    }
 
     var headline: String {
+        if isTeamGame {
+            let played = teamEntries.filter { $0.thru > 0 }
+            guard let leader = played.first else { return "" }
+            let tied = played.filter { $0.position == leader.position }
+            if tied.count > 1 {
+                return "\(ListFormatter.localizedString(byJoining: tied.map(\.team.name))) \(isFinished ? "tie" : "are tied") on \(leader.statusText)"
+            }
+            return "\(leader.team.name) team \(isFinished ? "wins" : "leads") with \(leader.statusText)"
+        }
         if let leader = played.first {
             let tied = played.filter { $0.position == leader.position }
             if tied.count > 1 {
@@ -83,11 +120,18 @@ struct ResultsCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
             header
-            if model.showsPodium {
-                Podium(entries: Array(model.entries.prefix(3)), animated: interactive)
-            }
-            if !model.entries.isEmpty {
-                rankings
+            if model.isTeamGame {
+                if let leader = model.leadingTeam {
+                    winners(leader)
+                }
+                teamRankings
+            } else {
+                if model.showsPodium {
+                    Podium(entries: Array(model.entries.prefix(3)), animated: interactive)
+                }
+                if !model.entries.isEmpty {
+                    rankings
+                }
             }
             ScorecardGrid(
                 course: model.course, holes: model.holes, tee: model.tee, players: model.rows,
@@ -115,8 +159,68 @@ struct ResultsCard: View {
         }
     }
 
+    private func winners(_ entry: TeamLeaderboardEntry) -> some View {
+        HStack(spacing: 14) {
+            TeamAvatars(team: entry.team, members: entry.members, size: 44)
+            VStack(alignment: .leading, spacing: 2) {
+                Eyebrow(model.isFinished ? "Winners" : "Leading", color: Theme.gold)
+                Text("\(entry.team.name) team").font(.display(24))
+                Text(entry.members.map(\.name).joined(separator: " & ")).font(.subheadline).foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 0)
+            Image(systemName: "crown.fill")
+                .font(.title3)
+                .foregroundStyle(Theme.gold)
+                .symbolEffect(.bounce, value: model.isFinished)
+        }
+        .padding(.vertical, 6)
+    }
+
+    private var teamRankings: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 0) {
+                Text("POS").frame(width: 38, alignment: .leading)
+                Text("TEAM")
+                Spacer()
+                Text("SCORE").frame(width: 76, alignment: .trailing)
+            }
+            .font(.eyebrow)
+            .tracking(0.8)
+            .foregroundStyle(.secondary)
+            .padding(.vertical, 8)
+            Hairline()
+            ForEach(model.teamEntries) { entry in
+                HStack(spacing: 0) {
+                    Text(entry.thru > 0 ? entry.positionLabel : "–")
+                        .font(.figure(15, weight: .semibold))
+                        .foregroundStyle(entry.position == 1 && entry.thru > 0 ? Theme.gold : .primary)
+                        .frame(width: 38, alignment: .leading)
+                    Rectangle()
+                        .fill(Theme.teamColor(entry.team.colorIndex))
+                        .frame(width: 3, height: 32)
+                        .padding(.trailing, 10)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("\(entry.team.name) team").font(.body.weight(.medium))
+                        Text(entry.members.map(\.name).joined(separator: ", "))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                    Spacer(minLength: 4)
+                    Text(entry.statusText)
+                        .font(.figure(17, weight: .semibold))
+                        .foregroundStyle(entry.statusText.hasPrefix("-") ? Theme.flag : .primary)
+                        .frame(width: 76, alignment: .trailing)
+                }
+                .padding(.vertical, 10)
+                Hairline()
+            }
+        }
+    }
+
     private var eyebrowText: String {
         var parts = [model.format?.displayName ?? "Round"]
+        if let team = model.teamFormat { parts.insert(team.displayName, at: 0) }
         if model.isNet { parts.append("Net") }
         parts.append(model.date.formatted(date: .abbreviated, time: .omitted))
         return parts.joined(separator: " · ")

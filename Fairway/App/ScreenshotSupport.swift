@@ -29,7 +29,7 @@ struct ScreenshotSupport: ViewModifier {
     }
 
     enum DebugScreen: String, Identifiable {
-        case courseDetail, courseMap, replay, headToHead, handicap, trophies, results
+        case courseDetail, courseMap, replay, headToHead, handicap, trophies, results, teamResults, rules
         var id: String { rawValue }
     }
 
@@ -52,8 +52,21 @@ struct ScreenshotSupport: ViewModifier {
             HandicapView(gameType: .golf)
         case .trophies:
             TrophyCabinetView()
+        case .rules:
+            RulesView()
+        case .teamResults:
+            if let record = app.library.matchHistory.first(where: { $0.snapshot.match.isTeamGame }) {
+                ScrollView {
+                    PastMatchSection(record: record)
+                        .padding(.horizontal, Theme.gutter)
+                        .padding(.bottom, 32)
+                }
+                .background(Theme.background)
+                .navigationTitle(record.snapshot.match.name)
+                .navigationBarTitleDisplayMode(.inline)
+            }
         case .results:
-            if let record = app.library.matchHistory.first(where: { $0.snapshot.participants.count >= 4 }) {
+            if let record = app.library.matchHistory.first(where: { $0.snapshot.participants.count >= 4 && !$0.snapshot.match.isTeamGame }) {
                 ScrollView {
                     PastMatchSection(record: record)
                         .padding(.horizontal, Theme.gutter)
@@ -130,6 +143,16 @@ struct ScreenshotSupport: ViewModifier {
         case "h2h": tab = .stats; return .headToHead
         case "handicap": return .handicap
         case "trophies": return .trophies
+        case "teamresults": return .teamResults
+        case "rules": return .rules
+        case "teams":
+            if let session = try? await app.createMatch(
+                name: "Fourball Friday", course: DemoData.golfCourse, tee: DemoData.golfCourse.tees.first,
+                holes: DemoData.golfCourse.holes.map(\.number), format: .strokePlay, useHandicaps: true,
+                teamFormat: .fourBall, teamCount: 2
+            ) {
+                app.present(.match(session.id))
+            }
         case "results": return .results
         default: break
         }

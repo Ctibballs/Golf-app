@@ -106,6 +106,7 @@ struct LobbyView: View {
     @State private var showGuestPrompt = false
     @State private var guestName = ""
     @State private var copied = false
+    @State private var rulesShown: FormatRules?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -113,7 +114,11 @@ struct LobbyView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: Theme.sectionSpacing) {
                     codeBlock
-                    players
+                    if session.match.isTeamGame {
+                        teams
+                    } else {
+                        players
+                    }
                 }
                 .padding(.horizontal, Theme.gutter)
                 .padding(.top, 8)
@@ -123,6 +128,11 @@ struct LobbyView: View {
         }
         .background(Theme.background)
         .sensoryFeedback(.impact(weight: .light), trigger: session.snapshot.participants.count) { _, _ in app.hapticsEnabled }
+        // The host puts newcomers on a team as they arrive.
+        .task(id: session.snapshot.participants.map(\.id)) {
+            if session.isHost { await session.placeNewPlayers() }
+        }
+        .sheet(item: $rulesShown) { RuleSheet(rule: $0) }
         .alert("Add guest", isPresented: $showGuestPrompt) {
             TextField("Name", text: $guestName)
             Button("Add") {
@@ -196,11 +206,21 @@ struct LobbyView: View {
                 .buttonStyle(SecondaryButtonStyle(height: 44))
                 .sensoryFeedback(.success, trigger: copied)
             }
+            Button {
+                rulesShown = FormatRules.rules(for: session.match)
+            } label: {
+                Label("How to play \(FormatRules.rules(for: session.match).name)", systemImage: "book")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(Theme.fairway)
+            }
+            .buttonStyle(PressableStyle())
         }
     }
 
     private var matchDetails: String {
-        var parts = [session.match.course.name, session.match.format.displayName]
+        var parts = [session.match.course.name]
+        if session.match.isTeamGame, let team = session.match.teamFormat { parts.append(team.displayName) }
+        parts.append(session.match.format.displayName)
         if session.match.useHandicaps { parts.append("Net") }
         return parts.joined(separator: " · ")
     }
@@ -209,24 +229,94 @@ struct LobbyView: View {
         VStack(alignment: .leading, spacing: 4) {
             SectionHeader(title: "Players · \(session.snapshot.participants.count)", actionTitle: "Add guest") { showGuestPrompt = true }
             DividedList(session.snapshot.participants, inset: 50) { player in
-                HStack(spacing: 14) {
-                    AvatarView(avatar: player.avatar, size: 36, showsRing: player.id == session.myID)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(player.id == session.myID ? "\(player.name) (you)" : player.name)
-                            .font(.body.weight(.medium))
-                            .lineLimit(1)
-                        Text(playerDetail(player)).font(.footnote).foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    if player.id == session.match.hostID {
-                        Eyebrow("Host", color: Theme.gold)
-                    }
-                }
-                .padding(.vertical, 10)
-                .transition(.asymmetric(insertion: .move(edge: .bottom).combined(with: .opacity), removal: .opacity))
+                playerRow(player, team: nil)
             }
             .animation(.snappySpring, value: session.snapshot.participants.map(\.id))
         }
+    }
+
+    private var teams: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            SectionHeader(
+                title: "Teams · \(session.snapshot.participants.count) players",
+                subtitle: session.isHost ? "Use the arrows to move players between teams." : "The host picks the teams."
+            ) {
+                if session.isHost {
+                    Button("Balance") { Task { await session.balanceTeams() } }
+                        .font(.subheadline.weight(.medium))
+                        .tint(Theme.fairway)
+                }
+            }
+            ForEach(session.match.teams) { team in
+                let members = team.memberIDs.compactMap { session.snapshot.participant($0) }
+                TeamLabel(team: team, detail: "\(members.count) player\(members.count == 1 ? "" : "s")")
+                    .padding(.top, 16)
+                    .padding(.bottom, 2)
+                if members.isEmpty {
+                    Text("No one yet").font(.footnote).foregroundStyle(.tertiary).padding(.vertical, 10)
+                }
+                DividedList(members, inset: 50) { player in
+                    playerRow(player, team: team)
+                }
+            }
+            if !session.unplacedPlayers.isEmpty {
+                Eyebrow("Joining").padding(.top, 16)
+                DividedList(session.unplacedPlayers, inset: 50) { player in
+                    playerRow(player, team: nil)
+                }
+            }
+            Hairline().padding(.top, 10)
+            Button {
+                showGuestPrompt = true
+            } label: {
+                Label("Add a guest without the app", systemImage: "person.badge.plus")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(Theme.fairway)
+                    .padding(.vertical, 12)
+            }
+            .buttonStyle(PressableStyle())
+        }
+        .animation(.snappySpring, value: session.match.teams)
+        .animation(.snappySpring, value: session.snapshot.participants.map(\.id))
+    }
+
+    private func playerRow(_ player: Participant, team: Team?) -> some View {
+        HStack(spacing: 14) {
+            AvatarView(avatar: player.avatar, size: 36, showsRing: player.id == session.myID)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(player.id == session.myID ? "\(player.name) (you)" : player.name)
+                    .font(.body.weight(.medium))
+                    .lineLimit(1)
+                Text(playerDetail(player)).font(.footnote).foregroundStyle(.secondary)
+            }
+            Spacer()
+            if player.id == session.match.hostID {
+                Eyebrow("Host", color: Theme.gold)
+            }
+            if session.isHost && session.match.isTeamGame {
+                Menu {
+                    ForEach(session.match.teams) { option in
+                        Button {
+                            Task { await session.move(player.id, toTeam: option.id) }
+                        } label: {
+                            if option.id == team?.id {
+                                Label("\(option.name) team", systemImage: "checkmark")
+                            } else {
+                                Text("Move to \(option.name)")
+                            }
+                        }
+                    }
+                } label: {
+                    Image(systemName: "arrow.left.arrow.right")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(Theme.fairway)
+                        .frame(width: 32, height: 32)
+                        .overlay(Circle().strokeBorder(Theme.outline, lineWidth: 1))
+                }
+            }
+        }
+        .padding(.vertical, 10)
+        .transition(.asymmetric(insertion: .move(edge: .bottom).combined(with: .opacity), removal: .opacity))
     }
 
     private func playerDetail(_ player: Participant) -> String {
@@ -290,14 +380,23 @@ struct MatchLeaderboardSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 4) {
-                    SectionHeader(title: session.match.format.displayName, subtitle: syncStatus) {
-                        LiveBadge()
-                    }
-                    DividedList(session.leaderboard, inset: 46) { entry in
-                        Button { selected = entry.participant } label: {
-                            LeaderboardRow(entry: entry, isMe: entry.id == session.myID, totalHoles: session.match.holeNumbers.count)
+                    if session.match.isTeamGame {
+                        SectionHeader(title: "\(session.match.teamFormat?.displayName ?? "Teams") · \(session.match.format.displayName)", subtitle: syncStatus) {
+                            LiveBadge()
                         }
-                        .buttonStyle(PressableStyle())
+                        DividedList(session.teamLeaderboard, inset: 46) { entry in
+                            TeamLeaderboardRow(entry: entry, isMine: entry.id == session.myTeam?.id)
+                        }
+                        if !session.match.isOneBallTeamGame {
+                            SectionHeader(title: "Players", subtitle: "Individual scores")
+                                .padding(.top, 24)
+                            playerRows
+                        }
+                    } else {
+                        SectionHeader(title: session.match.format.displayName, subtitle: syncStatus) {
+                            LiveBadge()
+                        }
+                        playerRows
                     }
                 }
                 .padding(.horizontal, Theme.gutter)
@@ -321,6 +420,17 @@ struct MatchLeaderboardSheet: View {
         }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
+    }
+}
+
+extension MatchLeaderboardSheet {
+    fileprivate var playerRows: some View {
+        DividedList(session.leaderboard, inset: 46) { entry in
+            Button { selected = entry.participant } label: {
+                LeaderboardRow(entry: entry, isMe: entry.id == session.myID, totalHoles: session.match.holeNumbers.count)
+            }
+            .buttonStyle(PressableStyle())
+        }
     }
 }
 

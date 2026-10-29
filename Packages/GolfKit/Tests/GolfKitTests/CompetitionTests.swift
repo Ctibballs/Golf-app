@@ -72,6 +72,21 @@ final class LeaderboardTests: XCTestCase {
         XCTAssertEqual(Leaderboard.matchPlayStatus(lead: 2, remaining: 5, played: 4), "2 UP")
         XCTAssertEqual(Leaderboard.matchPlayStatus(lead: -1, remaining: 0, played: 18), "1 DN")
     }
+
+    func testMatchPlayStrokesComeOffTheLowestHandicap() {
+        let low = participant("Low", [], handicap: 8)
+        let high = participant("High", [], handicap: 18)
+        var m = match(.matchPlay, handicaps: true)
+        let strokes = PlayingHandicap.allocations(in: m, participants: [low, high])
+        // Over nine holes the course handicaps are 4 and 9: High gets the 5-stroke
+        // difference on the five hardest holes, Low plays off scratch.
+        XCTAssertEqual(strokes[low.id]?.values.reduce(0, +), 0)
+        XCTAssertEqual(strokes[high.id]?.values.reduce(0, +), 5)
+        XCTAssertEqual(strokes[high.id]?[1], 1, "stroke index 1 gets a stroke")
+        XCTAssertEqual(strokes[high.id]?[9], 0)
+        m.format = .strokePlay
+        XCTAssertEqual(PlayingHandicap.allocations(in: m, participants: [low, high])[low.id]?.values.reduce(0, +), 4, "stroke play keeps full strokes")
+    }
 }
 
 final class TournamentStandingsTests: XCTestCase {
@@ -129,6 +144,128 @@ final class TournamentStandingsTests: XCTestCase {
         XCTAssertEqual(standings[1].roundToPar[1], -1)
         XCTAssertEqual(standings[1].currentHole, 4)
         XCTAssertEqual(standings[0].stats.holesPlayed, 11)
+    }
+}
+
+final class TeamTests: XCTestCase {
+    private let par9 = [4, 4, 3, 5, 4, 4, 3, 4, 5]
+
+    private func player(_ name: String, index: Double? = nil) -> Participant {
+        Participant(id: UUID(), name: name, avatar: Avatar(emoji: "🦊", colorIndex: 0), handicapIndex: index)
+    }
+
+    private func scored(_ p: Participant, _ strokes: [Int], updatedAt: Date = Date(timeIntervalSince1970: 0)) -> Participant {
+        var copy = p
+        for (i, s) in strokes.enumerated() { copy.setScore(HoleScore(holeNumber: i + 1, strokes: s)) }
+        copy.updatedAt = updatedAt
+        return copy
+    }
+
+    private func teamMatch(_ format: TeamFormat, scoring: ScoringFormat = .strokePlay, teams: [[Participant]], course: Course? = nil, handicaps: Bool = false) -> Match {
+        Match(code: "BCDF", hostID: teams[0][0].id, name: "Fourball", course: course ?? testCourse(holes: 9), format: scoring,
+              useHandicaps: handicaps, status: .live, teamFormat: format,
+              teams: teams.enumerated().map { Team(name: Team.defaultNames[$0.offset], colorIndex: $0.offset, memberIDs: $0.element.map(\.id)) })
+    }
+
+    func testBetterBallAndAggregateStrokePlay() {
+        let a = scored(player("Ann"), par9)                                          // level
+        let b = scored(player("Ben"), [5, 5, 4, 6, 3, 4, 3, 4, 5])                   // birdie on 5
+        let c = scored(player("Cat"), par9.map { $0 + 1 })                           // +9
+        let d = scored(player("Dan"), [4, 4, 3, 5, 4, 4, 3, 4, 6])                   // bogey on 9
+        let players = [a, b, c, d]
+
+        let bestBall = TeamLeaderboard.entries(for: MatchSnapshot(match: teamMatch(.fourBall, teams: [[a, b], [c, d]]), participants: players))
+        XCTAssertEqual(bestBall.map(\.team.name), ["Blue", "Red"])
+        XCTAssertEqual(bestBall[0].statusText, "-1")
+        XCTAssertEqual(bestBall[1].statusText, "+1")
+        XCTAssertEqual(bestBall[0].holeScores[5], 3, "the birdie is Blue's ball on 5")
+        XCTAssertEqual(bestBall[0].thru, 9)
+        XCTAssertTrue(bestBall[0].isFinished)
+
+        let aggregate = TeamLeaderboard.entries(for: MatchSnapshot(match: teamMatch(.aggregate, teams: [[a, b], [c, d]]), participants: players))
+        XCTAssertEqual(aggregate[0].statusText, "+3")
+        XCTAssertEqual(aggregate[1].statusText, "+10")
+    }
+
+    func testTeamMatchPlayAndStableford() {
+        let a = scored(player("Ann"), par9)
+        let b = scored(player("Ben"), [5, 5, 4, 6, 3, 4, 3, 4, 5])
+        let c = scored(player("Cat"), par9.map { $0 + 1 })
+        let d = scored(player("Dan"), [4, 4, 3, 5, 4, 4, 3, 4, 6])
+        let players = [a, b, c, d]
+
+        let match = TeamLeaderboard.entries(for: MatchSnapshot(match: teamMatch(.fourBall, scoring: .matchPlay, teams: [[a, b], [c, d]]), participants: players))
+        XCTAssertEqual(match[0].team.name, "Blue")
+        XCTAssertEqual(match[0].statusText, "2 UP", "won 5 and 9, halved the rest")
+        XCTAssertEqual(match[1].statusText, "2 DN")
+
+        let points = TeamLeaderboard.entries(for: MatchSnapshot(match: teamMatch(.fourBall, scoring: .stableford, teams: [[a, b], [c, d]]), participants: players))
+        XCTAssertEqual(points[0].points, 19, "eight pars and a birdie")
+        XCTAssertEqual(points[0].statusText, "19 pts")
+        XCTAssertEqual(points[1].points, 17)
+    }
+
+    func testOneBallFormatsUseTheLatestEntryAndTeamAllowances() {
+        let early = Date(timeIntervalSince1970: 100), late = Date(timeIntervalSince1970: 200)
+        let a = scored(player("Ann", index: 10), [5], updatedAt: early)
+        let b = scored(player("Ben", index: 20), [4], updatedAt: late)
+        XCTAssertEqual(TeamLeaderboard.teamBallScore(for: 1, members: [a, b])?.strokes, 4, "the most recent entry wins")
+
+        XCTAssertEqual(TeamHandicap.oneBallWeights(format: .scramble, teamSize: 2), [0.35, 0.15])
+        XCTAssertEqual(TeamHandicap.oneBallWeights(format: .scramble, teamSize: 4), [0.25, 0.2, 0.15, 0.1])
+        XCTAssertEqual(TeamHandicap.oneBallWeights(format: .alternateShot, teamSize: 2), [0.5, 0.5])
+        XCTAssertEqual(TeamHandicap.oneBallWeights(format: .chapman, teamSize: 2), [0.6, 0.4])
+        XCTAssertEqual(TeamHandicap.ownBallAllowance(format: .bestBall, scoring: .strokePlay), 0.75)
+
+        let c = player("Cat", index: 4), d = player("Dan", index: 6)
+        let course = testCourse(holes: 18)
+        let scramble = teamMatch(.scramble, teams: [[a, b], [c, d]], course: course, handicaps: true)
+        // Course handicaps 10 and 20: 35% of 10 + 15% of 20 = 6.5, rounded to 7.
+        XCTAssertEqual(TeamHandicap.teamHandicaps(in: scramble, participants: [a, b, c, d])[scramble.teams[0].id], 7)
+        let foursomes = teamMatch(.alternateShot, teams: [[a, b], [c, d]], course: course, handicaps: true)
+        XCTAssertEqual(TeamHandicap.teamHandicaps(in: foursomes, participants: [a, b, c, d])[foursomes.teams[0].id], 15)
+        // Chapman: 60% of the lower course handicap and 40% of the higher: 6 + 8.
+        let chapman = teamMatch(.chapman, teams: [[a, b], [c, d]], course: course, handicaps: true)
+        XCTAssertEqual(TeamHandicap.teamHandicaps(in: chapman, participants: [a, b, c, d])[chapman.teams[0].id], 14)
+        // Four-ball stroke play gives 85%; match play 90% off the lowest.
+        let fourball = teamMatch(.fourBall, teams: [[a, b], [c, d]], course: course, handicaps: true)
+        XCTAssertEqual(TeamHandicap.playerHandicaps(in: fourball, participants: [a, b, c, d])[b.id], 17)
+        var fourballMatch = fourball
+        fourballMatch.format = .matchPlay
+        let off = TeamHandicap.playerHandicaps(in: fourballMatch, participants: [a, b, c, d])
+        XCTAssertEqual(off[c.id], 0)
+        XCTAssertEqual(off[b.id], 14, "18 strokes at 90%, less Cat's 4")
+
+        // A scramble team scores from its single ball.
+        let entries = TeamLeaderboard.entries(for: MatchSnapshot(match: scramble, participants: [a, b, scored(c, [3]), d]))
+        XCTAssertEqual(entries.first { $0.team.name == "Blue" }?.holeScores[1], 4)
+    }
+
+    func testBuildingTeams() {
+        let players = [player("Ann", index: 2), player("Ben", index: 10), player("Cat", index: 18), player("Dan", index: 30)]
+        let teams = TeamBuilder.balanced(players, into: Team.defaults(count: 2))
+        XCTAssertEqual(teams[0].memberIDs, [players[0].id, players[3].id], "best and weakest together")
+        XCTAssertEqual(teams[1].memberIDs, [players[1].id, players[2].id])
+
+        let late = player("Eve")
+        let placed = TeamBuilder.placingNewPlayers([players[0], players[1], players[3], late], in: [teams[0], Team(name: "Red", colorIndex: 1, memberIDs: [players[1].id])])
+        XCTAssertEqual(placed[1].memberIDs, [players[1].id, late.id], "newcomers join the smallest team")
+        XCTAssertEqual(placed[0].memberIDs.count, 2)
+
+        let moved = TeamBuilder.moving(players[0].id, to: teams[1].id, in: teams)
+        XCTAssertFalse(moved[0].memberIDs.contains(players[0].id))
+        XCTAssertTrue(moved[1].memberIDs.contains(players[0].id))
+    }
+
+    func testMatchesSavedBeforeTeamsStillDecode() throws {
+        let match = Match(code: "BCDF", hostID: UUID(), name: "Old", course: testCourse())
+        var json = try JSONSerialization.jsonObject(with: JSONEncoder().encode(match)) as! [String: Any]
+        json.removeValue(forKey: "teams")
+        json.removeValue(forKey: "teamFormat")
+        let decoded = try JSONDecoder().decode(Match.self, from: JSONSerialization.data(withJSONObject: json))
+        XCTAssertEqual(decoded.id, match.id)
+        XCTAssertTrue(decoded.teams.isEmpty)
+        XCTAssertFalse(decoded.isTeamGame)
     }
 }
 
