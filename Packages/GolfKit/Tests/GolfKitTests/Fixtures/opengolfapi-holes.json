@@ -1,0 +1,6 @@
+{
+  "holes": [
+    {"hole_number": 1, "par": 4, "handicap_index": 18, "yardages": {"Blue": 360, "Red": 310}, "meters": null},
+    {"hole_number": 4, "par": 3, "handicap_index": 16, "yardages": {"Blue": 165, "Red": 140}, "meters": null}
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "id": "0e1e596d-8e86-4ff8-90e9-6a439a0ba271",
+  "course_name": "Egyptian Country Club",
+  "city": "Mounds",
+  "state": "IL",
+  "country": "US",
+  "latitude": 37.142398,
+  "longitude": -89.1890226,
+  "course_type": "Semi-Private",
+  "holes": 8,
+  "par_total": 36,
+  "phone": null,
+  "website": "https://example.com",
+  "year_built": null,
+  "total_yardage": 3042,
+  "osm_id": 1055837085,
+  "scorecard": [
+    {"hole_number": 1, "par": 4, "handicap_index": 18},
+    {"hole_number": 2, "par": 4, "handicap_index": 12},
+    {"hole_number": 3, "par": 5, "handicap_index": 4},
+    {"hole_number": 5, "par": 4, "handicap_index": 2},
+    {"hole_number": 6, "par": 4, "handicap_index": 6},
+    {"hole_number": 7, "par": 5, "handicap_index": 10},
+    {"hole_number": 8, "par": 3, "handicap_index": 14},
+    {"hole_number": 9, "par": 3, "handicap_index": 8}
+  ]
+}

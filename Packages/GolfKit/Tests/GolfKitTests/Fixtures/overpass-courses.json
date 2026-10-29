@@ -1,0 +1,48 @@
+{
+ "version": 0.6,
+ "elements": [
+  {
+   "type": "way",
+   "id": 100,
+   "center": {
+    "lat": 51.501,
+    "lon": -0.099
+   },
+   "tags": {
+    "leisure": "golf_course",
+    "name": "Fixture Golf Club",
+    "golf:par": "72"
+   }
+  },
+  {
+   "type": "node",
+   "id": 101,
+   "lat": 51.52,
+   "lon": -0.11,
+   "tags": {
+    "leisure": "miniature_golf",
+    "name": "Crazy Golf"
+   }
+  },
+  {
+   "type": "relation",
+   "id": 102,
+   "center": {
+    "lat": 51.47,
+    "lon": -0.13
+   },
+   "tags": {
+    "leisure": "golf_course",
+    "name": "Riverside Pitch and Putt"
+   }
+  },
+  {
+   "type": "way",
+   "id": 103,
+   "center": {
+    "lat": 51.53,
+    "lon": -0.1
+   }
+  }
+ ]
+}

@@ -1,0 +1,7 @@
+{
+  "count": 2,
+  "courses": [
+    {"id": "c4ba81b6-ac7b-4158-808a-1806500b665b", "course_name": "The Hills Golf Club", "city": "Lebanon", "state": "IL", "country": "US", "latitude": 38.6062228, "longitude": -89.8237604, "course_type": "Public", "holes": 18, "par_total": 72},
+    {"id": "a2269325-c392-4ad4-ae30-e825b1f5e4b7", "name": "Short Course Par 3", "city": "Murphysboro", "state": "IL", "lat": 37.75, "lng": -89.28, "type": "par3", "holes": 9, "par": 27}
+  ]
+}

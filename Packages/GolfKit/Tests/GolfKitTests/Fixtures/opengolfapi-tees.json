@@ -1,0 +1,6 @@
+{
+  "tees": [
+    {"id": 11, "tee_name": "Blue", "tee_color": "Blue", "gender": "M", "course_rating": 35.4, "slope_rating": 121, "total_yardage": 3042, "par": 36},
+    {"id": 12, "tee_name": "Red", "tee_color": "Red", "gender": "F", "course_rating": 34.9, "slope_rating": 117, "total_yardage": 2610, "par": 36}
+  ]
+}
