@@ -1,29 +1,38 @@
 import Foundation
 
-/// Which holes of a course are being played.
-public enum HoleSelection: String, Codable, CaseIterable, Identifiable, Sendable {
-    case all
-    case front
-    case back
+/// Which holes a round covers, in the order they're played: nine or eighteen, from any
+/// starting hole. Play wraps round the course, so starting on the 10th of 18 plays 10–18
+/// then 1–9 (a shotgun start works the same way).
+public struct HolePlan: Hashable, Sendable {
+    /// Holes to play; capped at the number the course has.
+    public var count: Int
+    public var startHole: Int
 
-    public var id: String { rawValue }
-
-    public var displayName: String {
-        switch self {
-        case .all: return "All holes"
-        case .front: return "Front 9"
-        case .back: return "Back 9"
-        }
+    public init(count: Int = 18, startHole: Int = 1) {
+        self.count = count
+        self.startHole = startHole
     }
 
     public func holeNumbers(for course: Course) -> [Int] {
         let numbers = course.holes.map(\.number)
-        guard numbers.count >= 18 else { return numbers }
-        switch self {
-        case .all: return numbers
-        case .front: return Array(numbers.prefix(9))
-        case .back: return Array(numbers.dropFirst(9).prefix(9))
+        guard !numbers.isEmpty else { return [] }
+        let start = numbers.firstIndex(of: startHole) ?? 0
+        return (0..<min(max(1, count), numbers.count)).map { numbers[(start + $0) % numbers.count] }
+    }
+
+    /// "Holes 1–18", "Holes 10–18, 1–9", "Holes 4–12".
+    public static func describe(_ holes: [Int]) -> String {
+        guard !holes.isEmpty else { return "No holes" }
+        var runs: [(Int, Int)] = []
+        for hole in holes {
+            if let last = runs.last, hole == last.1 + 1 {
+                runs[runs.count - 1].1 = hole
+            } else {
+                runs.append((hole, hole))
+            }
         }
+        let text = runs.map { $0.0 == $0.1 ? "\($0.0)" : "\($0.0)–\($0.1)" }.joined(separator: ", ")
+        return holes.count == 1 ? "Hole \(text)" : "Holes \(text)"
     }
 }
 

@@ -52,6 +52,24 @@ public struct OverpassClient: Sendable {
         return try Self.parseCourses(data, origin: center)
     }
 
+    /// Courses whose mapped grounds contain a point: where you're standing right now.
+    public func coursesContaining(_ point: GeoPoint) async throws -> [CourseSummary] {
+        let data = try await run(Self.containingQuery(point))
+        return try Self.parseCourses(data, origin: point)
+    }
+
+    static func containingQuery(_ point: GeoPoint) -> String {
+        """
+        [out:json][timeout:20];
+        is_in(\(point.latitude),\(point.longitude))->.inside;
+        (
+          way(pivot.inside)["leisure"~"^(golf_course|miniature_golf)$"];
+          relation(pivot.inside)["leisure"~"^(golf_course|miniature_golf)$"];
+        );
+        out center tags;
+        """
+    }
+
     /// Builds a playable course from OSM hole data (pars from `golf=hole` ways).
     public func course(for summary: CourseSummary) async throws -> (Course, CourseLayout?) {
         guard let location = summary.location else { throw HTTPError.decoding("Course has no location.") }

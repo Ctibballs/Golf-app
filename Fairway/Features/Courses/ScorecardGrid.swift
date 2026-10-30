@@ -41,8 +41,10 @@ struct ScorecardGrid: View {
         .padding(.vertical, 4)
     }
 
+    /// Nines in course order, like a printed card, even when play started on another hole.
     private var segments: [[Int]] {
-        stride(from: 0, to: holes.count, by: 9).map { Array(holes[$0..<min($0 + 9, holes.count)]) }
+        let ordered = holes.sorted()
+        return stride(from: 0, to: ordered.count, by: 9).map { Array(ordered[$0..<min($0 + 9, ordered.count)]) }
     }
 
     private func segmentGrid(_ segment: [Int], totalLabel: String, isLast: Bool) -> some View {

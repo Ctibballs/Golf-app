@@ -219,6 +219,13 @@ public struct CourseSummary: Codable, Hashable, Identifiable, Sendable {
         if let par, let holeCount, holeCount > 0 { return Double(par) / Double(holeCount) <= 3.05 }
         return false
     }
+
+    /// The kind of course, judging by its data.
+    public var inferredGameType: GameType {
+        if accessType == "miniature_golf" { return .miniGolf }
+        if looksLikePitchAndPutt || accessType == "pitch_and_putt" { return .pitchAndPutt }
+        return .golf
+    }
 }
 
 extension Course {

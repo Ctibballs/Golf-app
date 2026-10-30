@@ -305,7 +305,8 @@ final class TournamentSession: Identifiable {
         let round = tournament.rounds[index]
         let match = Match(
             code: JoinCode.generate(), hostID: myID, name: "\(tournament.name) · Round \(number)",
-            course: course, tee: round.tee, format: tournament.format == .stableford ? .stableford : .strokePlay,
+            course: course, tee: round.tee, holeNumbers: round.holeNumbers,
+            format: tournament.format == .stableford ? .stableford : .strokePlay,
             useHandicaps: tournament.useHandicaps, status: .live, startedAt: Date(),
             tournamentID: tournament.id, roundNumber: number
         )

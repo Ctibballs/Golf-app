@@ -27,13 +27,16 @@ public struct AppSettings: Codable, Hashable, Sendable {
     /// Detect the lie (green, bunker, fairway) from the course map when marking shots.
     public var autoDetectLie: Bool
     public var keepScreenAwake: Bool
+    /// Use your location to recognise the course you're at and fill it in for you.
+    public var detectCourse: Bool
     public var online: OnlineSettings
 
-    public init(units: UnitSystem = .default, haptics: Bool = true, autoDetectLie: Bool = true, keepScreenAwake: Bool = true, online: OnlineSettings = OnlineSettings()) {
+    public init(units: UnitSystem = .default, haptics: Bool = true, autoDetectLie: Bool = true, keepScreenAwake: Bool = true, detectCourse: Bool = true, online: OnlineSettings = OnlineSettings()) {
         self.units = units
         self.haptics = haptics
         self.autoDetectLie = autoDetectLie
         self.keepScreenAwake = keepScreenAwake
+        self.detectCourse = detectCourse
         self.online = online
     }
 
@@ -44,6 +47,7 @@ public struct AppSettings: Codable, Hashable, Sendable {
         haptics = try c.decodeIfPresent(Bool.self, forKey: .haptics) ?? true
         autoDetectLie = try c.decodeIfPresent(Bool.self, forKey: .autoDetectLie) ?? true
         keepScreenAwake = try c.decodeIfPresent(Bool.self, forKey: .keepScreenAwake) ?? true
+        detectCourse = try c.decodeIfPresent(Bool.self, forKey: .detectCourse) ?? true
         online = try c.decodeIfPresent(OnlineSettings.self, forKey: .online) ?? OnlineSettings()
     }
 }

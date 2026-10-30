@@ -27,11 +27,21 @@ struct SettingsView: View {
                 Text("Metric is the default. Everything is stored in metric and converted for display.")
             }
 
-            Section("On the course") {
+            Section {
+                Toggle("Recognise the course I'm at", isOn: app.binding(\.settings.detectCourse))
+                    .onChange(of: app.library.settings.detectCourse) { _, on in
+                        if on { app.location.requestOneShot() } else { app.courseFinder.clear() }
+                    }
                 Toggle("Haptics", isOn: app.binding(\.settings.haptics))
                 Toggle("Detect lie from the map", isOn: app.binding(\.settings.autoDetectLie))
                 Toggle("Keep screen awake while playing", isOn: app.binding(\.settings.keepScreenAwake))
                 Toggle("Share my position with my group", isOn: app.binding(\.settings.online.shareLiveLocation))
+            } header: {
+                Text("On the course")
+            } footer: {
+                Text("Fairway uses your location to spot the course you're standing on and fill it in when you start a round. It checks courses on this phone first, then OpenStreetMap and OpenGolfAPI.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
 
             Section {

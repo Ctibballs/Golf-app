@@ -15,6 +15,8 @@ public struct TournamentRound: Codable, Hashable, Identifiable, Sendable {
     public var matchID: UUID?
     public var matchCode: String?
     public var status: MatchStatus?
+    /// The holes this round covers, in playing order; nil plays the whole course from the 1st.
+    public var holeNumbers: [Int]?
 
     public var id: Int { number }
 
@@ -25,7 +27,8 @@ public struct TournamentRound: Codable, Hashable, Identifiable, Sendable {
         scheduledDate: Date? = nil,
         matchID: UUID? = nil,
         matchCode: String? = nil,
-        status: MatchStatus? = nil
+        status: MatchStatus? = nil,
+        holeNumbers: [Int]? = nil
     ) {
         self.number = number
         self.course = course
@@ -34,6 +37,7 @@ public struct TournamentRound: Codable, Hashable, Identifiable, Sendable {
         self.matchID = matchID
         self.matchCode = matchCode
         self.status = status
+        self.holeNumbers = holeNumbers
     }
 }
 

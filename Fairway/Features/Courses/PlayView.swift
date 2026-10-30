@@ -14,12 +14,19 @@ struct PlayView: View {
     @State private var searchError: String?
     @State private var showCustomEditor = false
     @State private var showQuickStart = false
+    @State private var hereSelection: CourseSummary?
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: Theme.sectionSpacing) {
                     VStack(alignment: .leading, spacing: 16) {
+                        if query.isEmpty, let here = app.courseFinder.detection?.course {
+                            CourseHereRow(course: here, actionTitle: "Open") {
+                                hereSelection = here.summary
+                            }
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                        }
                         filterChips
                         if query.isEmpty {
                             Button { showQuickStart = true } label: {
@@ -60,6 +67,7 @@ struct PlayView: View {
                 }
             }
             .navigationDestination(for: CourseSummary.self) { CourseDetailView(summary: $0) }
+            .navigationDestination(item: $hereSelection) { CourseDetailView(summary: $0) }
             .navigationDestination(for: Round.self) { RoundDetailView(roundID: $0.id) }
             .sheet(isPresented: $showCustomEditor) { CustomCourseEditor() }
             .sheet(isPresented: $showQuickStart) { RoundSetupView() }

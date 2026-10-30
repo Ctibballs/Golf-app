@@ -17,8 +17,15 @@ struct ScreenshotSupport: ViewModifier {
                 screen = await prepare(name)
             }
             .fullScreenCover(item: $screen) { screen in
-                NavigationStack { view(for: screen) }
-                    .environment(app)
+                Group {
+                    if screen == .setup {
+                        // Round setup brings its own navigation stack.
+                        RoundSetupView()
+                    } else {
+                        NavigationStack { view(for: screen) }
+                    }
+                }
+                .environment(app)
             }
     }
 
@@ -29,7 +36,7 @@ struct ScreenshotSupport: ViewModifier {
     }
 
     enum DebugScreen: String, Identifiable {
-        case courseDetail, courseMap, replay, headToHead, handicap, trophies, results, teamResults, rules
+        case courseDetail, courseMap, replay, headToHead, handicap, trophies, results, teamResults, rules, setup
         var id: String { rawValue }
     }
 
@@ -54,6 +61,8 @@ struct ScreenshotSupport: ViewModifier {
             TrophyCabinetView()
         case .rules:
             RulesView()
+        case .setup:
+            RoundSetupView()
         case .teamResults:
             if let record = app.library.matchHistory.first(where: { $0.snapshot.match.isTeamGame }) {
                 ScrollView {
@@ -145,6 +154,10 @@ struct ScreenshotSupport: ViewModifier {
         case "trophies": return .trophies
         case "teamresults": return .teamResults
         case "rules": return .rules
+        case "setup":
+            // Give the location a moment to place you on the course.
+            try? await Task.sleep(for: .seconds(2))
+            return .setup
         case "teams":
             if let session = try? await app.createMatch(
                 name: "Fourball Friday", course: DemoData.golfCourse, tee: DemoData.golfCourse.tees.first,

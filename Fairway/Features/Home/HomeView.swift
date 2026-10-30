@@ -19,6 +19,11 @@ struct HomeView: View {
                     if let round = app.library.inProgressRound {
                         ContinueRoundRow(round: round) { resume(round) }
                             .transition(.move(edge: .top).combined(with: .opacity))
+                    } else if let here = app.courseFinder.detection?.course {
+                        CourseHereRow(course: here) { showSetup = true } onDismiss: {
+                            withAnimation(.snappySpring) { app.courseFinder.dismiss() }
+                        }
+                        .transition(.move(edge: .top).combined(with: .opacity))
                     }
                     HandicapSummary { selectedTab = .profile }
                         .reveal(1)
@@ -39,6 +44,7 @@ struct HomeView: View {
                 .padding(.top, 8)
                 .padding(.bottom, 32)
                 .animation(.snappySpring, value: app.library.inProgressRoundID)
+                .animation(.snappySpring, value: app.courseFinder.detection?.course.id)
                 .animation(.gentle, value: weather?.fetchedAt)
             }
             .background(Theme.background)

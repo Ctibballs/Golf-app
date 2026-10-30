@@ -18,6 +18,8 @@ struct FairwayApp: App {
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .background { app.saveNow() }
+            // A fresh fix when the app comes forward, to spot the course you've arrived at.
+            if phase == .active && app.library.settings.detectCourse { app.location.requestOneShot() }
         }
     }
 }
@@ -57,6 +59,7 @@ struct RootView: View {
             }
         }
         .animation(.easeInOut(duration: 0.45), value: app.isOnboarded)
+        .onChange(of: app.location.point) { app.lookForCourse() }
         .overlay(alignment: .top) { BannerOverlay() }
         .modifier(ScreenshotSupport(tab: $tab))
         .fullScreenCover(item: presentationBinding) { presentation in

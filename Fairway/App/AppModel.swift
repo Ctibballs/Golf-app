@@ -38,6 +38,7 @@ enum JoinResult {
 final class AppModel {
     private(set) var library: GolfLibrary
     let location = LocationService()
+    let courseFinder = CourseFinder()
     private(set) var matchService: any MatchService
     private(set) var layouts: [String: CourseLayout] = [:]
     private(set) var sessions: [UUID: MatchSession] = [:]
@@ -64,6 +65,49 @@ final class AppModel {
         self.demoService = demo
         self.matchService = demo
         reconfigureOnline()
+        configureCourseFinder()
+    }
+
+    // MARK: - Course detection
+
+    private func configureCourseFinder() {
+        courseFinder.knownCourses = { [weak self] in
+            (self?.library.knownCourses ?? []) + DemoData.courses
+        }
+        courseFinder.layouts = { [weak self] in
+            var all = self?.layouts ?? [:]
+            for course in DemoData.courses {
+                if let layout = DemoData.layout(forCourseID: course.id) { all[course.id] = layout }
+            }
+            return all
+        }
+        courseFinder.remoteLookup = { [weak self] point in
+            await self?.courseHere(point)
+        }
+    }
+
+    /// Checks which course you're at, when detection is on and you're not mid-round.
+    func lookForCourse() {
+        guard library.settings.detectCourse else {
+            courseFinder.clear()
+            return
+        }
+        guard library.inProgressRoundID == nil, let point = location.point else { return }
+        courseFinder.update(location: point)
+    }
+
+    /// The course you're at: the map knows the grounds, the directory knows the scorecard.
+    private func courseHere(_ point: GeoPoint) async -> Course? {
+        let osmClient = overpass
+        let apiClient = courseAPI
+        async let inside = try? osmClient.coursesContaining(point)
+        async let close = try? osmClient.courses(near: point, radius: 150)
+        async let listed = try? apiClient.searchCourses(near: point, radiusKilometres: 2)
+        let (containing, near, directory) = await (inside, close, listed)
+        guard let summary = CourseDetector.bestMatch(
+            at: point, containing: containing ?? [], near: near ?? [], listed: directory ?? []
+        ) else { return nil }
+        return try? await loadCourse(summary)
     }
 
     // MARK: - Library access

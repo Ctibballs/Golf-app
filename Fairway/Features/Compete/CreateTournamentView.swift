@@ -11,6 +11,8 @@ struct CreateTournamentView: View {
     @State private var useHandicaps = true
     @State private var roundCount = 2
     @State private var courses: [Int: Course] = [:]
+    @State private var holeCount = 18
+    @State private var startHole = 1
     @State private var isCreating = false
 
     var body: some View {
@@ -61,6 +63,21 @@ struct CreateTournamentView: View {
                 }
 
                 Section {
+                    Picker("Holes", selection: $holeCount) {
+                        Text("18 holes").tag(18)
+                        Text("9 holes").tag(9)
+                    }
+                    .pickerStyle(.segmented)
+                    Picker("Start on hole", selection: $startHole) {
+                        ForEach(1...maxHoles, id: \.self) { Text("Hole \($0)").tag($0) }
+                    }
+                } header: {
+                    Text("Holes")
+                } footer: {
+                    Text("Every round plays \(holeCount == 18 ? "the full course" : "nine holes") from hole \(startHole), carrying on round the course. A nine-hole course plays its nine.")
+                }
+
+                Section {
                     Label("Players join with the tournament code. Each round opens as a live match everyone plays into, with a leaderboard showing every player's current hole.", systemImage: "info.circle")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
@@ -82,7 +99,10 @@ struct CreateTournamentView: View {
             }
             .onAppear {
                 if name.isEmpty { name = "\(app.profile.name)'s Open" }
-                if courses[1] == nil, let recent = app.library.completedRounds.first(where: { $0.gameType == gameType })?.course {
+                // Start from the course you're at, or the one you played last.
+                if courses[1] == nil, let here = app.courseFinder.detection?.course, here.gameType == gameType {
+                    courses[1] = here
+                } else if courses[1] == nil, let recent = app.library.completedRounds.first(where: { $0.gameType == gameType })?.course {
                     courses[1] = recent
                 }
             }
@@ -90,6 +110,11 @@ struct CreateTournamentView: View {
                 courses = [:]
             }
         }
+    }
+
+    /// The most holes any chosen course has, for the starting-hole list.
+    private var maxHoles: Int {
+        max(1, courses.values.map(\.holeCount).max() ?? 18)
     }
 
     private var canCreate: Bool {
@@ -100,7 +125,10 @@ struct CreateTournamentView: View {
         isCreating = true
         defer { isCreating = false }
         let rounds = (1...roundCount).map { number in
-            TournamentRound(number: number, course: courses[number], tee: courses[number]?.defaultTee)
+            TournamentRound(
+                number: number, course: courses[number], tee: courses[number]?.defaultTee,
+                holeNumbers: courses[number].map { HolePlan(count: holeCount, startHole: startHole).holeNumbers(for: $0) }
+            )
         }
         do {
             let session = try await app.createTournament(

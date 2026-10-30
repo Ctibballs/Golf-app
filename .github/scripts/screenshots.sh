@@ -47,7 +47,7 @@ reboot_simulator() {
 hangs=()
 previous="(start)"
 # Map-heavy screens last, so a rendering hang can't cost the others.
-for screen in onboarding home round lobby teams match tournament results teamresults trophies rules play stats h2h handicap compete profile imperial course map replay; do
+for screen in onboarding home setup round lobby teams match tournament results teamresults trophies rules play stats h2h handicap compete profile imperial course map replay; do
   # terminate fails harmlessly when the app isn't running; exit 142 means it timed out (hung).
   limit 30 xcrun simctl terminate "$UDID" "$BUNDLE_ID" 2>/dev/null
   status=$?

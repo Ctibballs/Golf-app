@@ -12,7 +12,9 @@ struct RoundSetupView: View {
 
     @State private var selectedCourse: Course?
     @State private var teeID: String?
-    @State private var holes: HoleSelection = .all
+    @State private var holeCount = 18
+    @State private var startHole = 1
+    @State private var courseOrigin: CourseOrigin = .none
     @State private var withFriends = false
     @State private var format: ScoringFormat = .strokePlay
     @State private var useHandicaps = true
@@ -24,6 +26,13 @@ struct RoundSetupView: View {
     @State private var isCreating = false
     @State private var didSetUp = false
 
+    /// Where the selected course came from, so a later location fix doesn't replace a choice.
+    private enum CourseOrigin { case none, given, detected, recent, picked }
+
+    private func holeNumbers(for course: Course) -> [Int] {
+        HolePlan(count: holeCount, startHole: startHole).holeNumbers(for: course)
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -31,7 +40,7 @@ struct RoundSetupView: View {
                     courseSection
                     if let selectedCourse {
                         if !selectedCourse.tees.isEmpty { teeSection(selectedCourse) }
-                        if selectedCourse.holeCount >= 18 { holesSection }
+                        holesSection(selectedCourse)
                         playersSection
                         if withFriends { matchSection(selectedCourse) }
                         summary(selectedCourse)
@@ -50,6 +59,7 @@ struct RoundSetupView: View {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
             }
             .onAppear(perform: setUp)
+            .onChange(of: app.courseFinder.detection?.course.id) { adoptDetectedCourse() }
         }
     }
 
@@ -60,8 +70,7 @@ struct RoundSetupView: View {
             SectionHeader(title: "Course")
             NavigationLink {
                 CoursePickerView { picked in
-                    selectedCourse = picked
-                    teeID = picked.defaultTee?.id
+                    choose(picked, origin: .picked)
                 }
             } label: {
                 NavigationRowLabel(
@@ -71,7 +80,24 @@ struct RoundSetupView: View {
                 )
             }
             .buttonStyle(PressableStyle())
+            if courseOrigin == .detected {
+                HStack(spacing: 8) {
+                    LocationPulse(size: 8)
+                    Text("Found from your location").font(.footnote).foregroundStyle(Theme.fairway)
+                    Spacer()
+                    Text("Tap the course to change it").font(.caption).foregroundStyle(.secondary)
+                }
+                .padding(.leading, 38)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            } else if app.courseFinder.isSearching && course == nil {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text("Looking for the course you're at…").font(.footnote).foregroundStyle(.secondary)
+                }
+                .padding(.leading, 38)
+            }
         }
+        .animation(.snappySpring, value: courseOrigin == .detected)
     }
 
     private func teeSection(_ course: Course) -> some View {
@@ -90,13 +116,32 @@ struct RoundSetupView: View {
         }
     }
 
-    private var holesSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            SectionHeader(title: "Holes")
-            Picker("Holes", selection: $holes) {
-                ForEach(HoleSelection.allCases) { Text($0.displayName).tag($0) }
+    private func holesSection(_ course: Course) -> some View {
+        let numbers = holeNumbers(for: course)
+        return VStack(alignment: .leading, spacing: 14) {
+            SectionHeader(title: "Holes", subtitle: HolePlan.describe(numbers)) {
+                if course.holeCount < 18 {
+                    Text("\(course.holeCount)-hole course").font(.caption).foregroundStyle(.secondary)
+                }
             }
-            .pickerStyle(.segmented)
+            if course.holeCount >= 18 {
+                Picker("Holes", selection: $holeCount.animation(.snappySpring)) {
+                    Text("18 holes").tag(18)
+                    Text("9 holes").tag(9)
+                }
+                .pickerStyle(.segmented)
+                if holeCount == 9 {
+                    HStack(spacing: 8) {
+                        Chip(title: "Front nine", isSelected: numbers == Array(1...9)) { withAnimation(.snappySpring) { startHole = 1 } }
+                        Chip(title: "Back nine", isSelected: numbers == Array(10...18)) { withAnimation(.snappySpring) { startHole = 10 } }
+                    }
+                    .transition(.opacity)
+                }
+            }
+            VStack(alignment: .leading, spacing: 8) {
+                Eyebrow("Start on hole")
+                StartHolePicker(holes: course.holes.map(\.number), playing: Set(numbers), selection: $startHole)
+            }
         }
     }
 
@@ -212,7 +257,7 @@ struct RoundSetupView: View {
     }
 
     private func summary(_ course: Course) -> some View {
-        let numbers = holes.holeNumbers(for: course)
+        let numbers = holeNumbers(for: course)
         let tee = selectedTee(course)
         let lengths = numbers.compactMap { course.hole($0)?.length(for: tee) }
         let totalLength: Double? = lengths.isEmpty ? nil : lengths.reduce(0, +)
@@ -266,15 +311,40 @@ struct RoundSetupView: View {
     private func setUp() {
         guard !didSetUp else { return }
         didSetUp = true
-        selectedCourse = course ?? app.library.completedRounds.first?.course
-        teeID = tee?.id ?? selectedCourse?.defaultTee?.id
         withFriends = startsAsMatch
         matchName = "\(app.profile.name)'s round"
+        if let course {
+            choose(course, origin: .given)
+            if let tee { teeID = tee.id }
+        } else if let detected = app.courseFinder.detection?.course {
+            choose(detected, origin: .detected)
+        } else if let recent = app.library.completedRounds.first?.course {
+            choose(recent, origin: .recent)
+        }
+        // A fresh fix, in case you've just arrived at a course.
+        if course == nil && app.library.settings.detectCourse { app.location.requestOneShot() }
+    }
+
+    private func choose(_ picked: Course, origin: CourseOrigin) {
+        withAnimation(.snappySpring) {
+            selectedCourse = picked
+            courseOrigin = origin
+            teeID = picked.defaultTee?.id
+            if !picked.holes.contains(where: { $0.number == startHole }) { startHole = picked.holes.first?.number ?? 1 }
+        }
+    }
+
+    /// Switches to the course you're at when it's found, unless you've chosen one yourself.
+    private func adoptDetectedCourse() {
+        guard let detected = app.courseFinder.detection?.course,
+              courseOrigin == .none || courseOrigin == .recent,
+              detected.id != selectedCourse?.id else { return }
+        choose(detected, origin: .detected)
     }
 
     private func start() async {
         guard let course = selectedCourse else { return }
-        let numbers = holes.holeNumbers(for: course)
+        let numbers = holeNumbers(for: course)
         let tee = selectedTee(course)
         if withFriends {
             isCreating = true
