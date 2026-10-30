@@ -36,6 +36,19 @@ limit 30 xcrun simctl privacy "$UDID" grant location "$BUNDLE_ID" || true
 # Stand on the fairway of demo hole 4 so distances show up.
 limit 30 xcrun simctl location "$UDID" set 51.447495,-0.263080 || true
 
+# A fresh simulator can stay busy (data migration) for a while after booting, which makes
+# the first launches time out. Warm up with one patient launch before capturing anything.
+for attempt in 1 2 3; do
+  if limit 180 xcrun simctl launch "$UDID" "$BUNDLE_ID" -FairwayScreen home >/dev/null; then
+    sleep 10
+    limit 120 xcrun simctl terminate "$UDID" "$BUNDLE_ID" 2>/dev/null || true
+    log "Warmed up"
+    break
+  fi
+  log "Warm-up launch $attempt timed out; waiting"
+  sleep 30
+done
+
 reboot_simulator() {
   log "Rebooting simulator"
   limit 120 xcrun simctl shutdown "$UDID" || true

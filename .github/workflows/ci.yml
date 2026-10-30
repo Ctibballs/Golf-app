@@ -50,7 +50,7 @@ jobs:
       - name: Capture screenshots in the simulator
         id: screenshots
         continue-on-error: true
-        timeout-minutes: 20
+        timeout-minutes: 30
         run: .github/scripts/screenshots.sh DerivedData/Build/Products/Debug-iphonesimulator/Fairway.app screenshots
       - name: Upload screenshots
         if: always() && steps.screenshots.outcome != 'skipped'
