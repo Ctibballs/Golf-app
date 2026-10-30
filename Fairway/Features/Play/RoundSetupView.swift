@@ -84,8 +84,6 @@ struct RoundSetupView: View {
                 HStack(spacing: 8) {
                     LocationPulse(size: 8)
                     Text("Found from your location").font(.footnote).foregroundStyle(Theme.fairway)
-                    Spacer()
-                    Text("Tap the course to change it").font(.caption).foregroundStyle(.secondary)
                 }
                 .padding(.leading, 38)
                 .transition(.opacity.combined(with: .move(edge: .top)))
